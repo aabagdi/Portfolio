@@ -17,5 +17,6 @@ np.clip(data2, -8192, 8192, out = data2)
 
 sd.play(data2, sampleRate)
 sd.wait()
+
 write("sine.wav", sampleRate, data1.astype(np.int16))
 write("clipped.wav", sampleRate, data2.astype(np.int16))
