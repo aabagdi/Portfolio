@@ -8,10 +8,10 @@ freq = 440
 amp1 = 8192
 amp2 = 16384
 
-range = np.linspace(0., 1., sampleRate)
+t = np.linspace(0., 1., sampleRate)
 
-sine = amp1 * np.sin(2. * np.pi * freq * range)
-clipped = amp2 * np.sin(2. * np.pi * freq * range)
+sine = amp1 * np.sin(2. * np.pi * freq * t)
+clipped = amp2 * np.sin(2. * np.pi * freq * t)
 
 np.clip(clipped, -8192, 8191, out = clipped)
 
