@@ -10,13 +10,13 @@ amp2 = 16384
 
 range = np.linspace(0., 1., sampleRate)
 
-data1 = amp1 * np.sin(2. * np.pi * freq * range)
-data2 = amp2 * np.sin(2. * np.pi * freq * range)
+sine = amp1 * np.sin(2. * np.pi * freq * range)
+clipped = amp2 * np.sin(2. * np.pi * freq * range)
 
-np.clip(data2, -8192, 8192, out = data2)
+np.clip(clipped, -8192, 8191, out = clipped)
 
-sd.play(data2, sampleRate)
+sd.play(clipped, sampleRate)
 sd.wait()
 
-write("sine.wav", sampleRate, data1.astype(np.int16))
-write("clipped.wav", sampleRate, data2.astype(np.int16))
+write("sine.wav", sampleRate, sine.astype(np.int16))
+write("clipped.wav", sampleRate, clipped.astype(np.int16))
