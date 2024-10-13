@@ -13,10 +13,10 @@
     * Break the ciphertext into blocks.
     * Each block is encrypted seperately, using the same function, and the concatenated together.
 - However, since data often contains repeating patterns, this often leads to patterns in the ciphertext.
-- There is a striking example of this on [Wikipedia](https://www.wikiwand.com/en/articles/Block_cipher_mode_of_operation#Electronic_codebook_(ECB)).
+- There is a striking example of this on [Wikipedia](https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation?oldformat=true#Electronic_codebook_(ECB)).
 - In the example on the page, the Linux penguin contains uniform areas of color which is easily seen in the processed image.
 - Although ECB is not secure at all, I was wondering of its use for music and sounds, and to perhaps create a synth that takes in a sample, encrypts it using ECB and spits it out.
-- I did some research on .wav headers, and found a [promising StackOverflow link](https://stackoverflow.com/questions/55420292/remove-file-header-from-a-wav-file-in-python3) about hwo to extract the header and modify the data in Python. I will do more research later.
+- I did some research on .wav headers, and found a [promising StackOverflow link](https://stackoverflow.com/questions/55420292/remove-file-header-from-a-wav-file-in-python3) about how to extract the header and modify the data in Python. I will do more research later.
 - The talk of PCM buffers also had me thinking about my voice recorder app that I released to the [App Store](https://apps.apple.com/us/app/micman/id6615062868).
 - After recording a sound, the app uses the file's PCM buffer to extract information about the amplitudes into an array of floats, and that array of floats is used to generated rectangles on the screen with their heights corresponding to the size of the float.
 - In detail, what my app does is:
