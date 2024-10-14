@@ -28,3 +28,6 @@
     * Return an array of floats from that processed data.
     * Uses SwiftUI (Apple's UI framework) to draw a set of 128 rectangles with their heights corresponding to the size of the float.
 - I got a lot of help with that code  from both online and LLM sources, so before learning about the buffer I wasn't exactly sure what was going on but now I have a clearer picture of what's happening under the hood.
+
+## 10/14/2024
+- Introduced myself in the Introductions channel on Zulip.
