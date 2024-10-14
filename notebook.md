@@ -21,7 +21,7 @@
 - After recording a sound, the app uses the file's PCM buffer to extract information about the amplitudes into an array of floats, and that array of floats is used to generated rectangles on the screen with their heights corresponding to the size of the float.
 - In detail, what my app does is:
     * Retrieve the PCM buffer of the .m4a file.
-    * Extract 128 samples from the buffer. Specifically, it gets the length of the audio file, divides it by 128 and uniformly picks samples from the buffer using that value.
+    * Extract 128 samples from the buffer. Specifically, it gets the length of the audio file, divides it by 128 and picks values from the buffer using that as a stride value.
     * Calculate the RMS of each sample.
     * Applies a noise floor to the sample.
     * Normalize the samples so that they fit within the range [0, 1].
