@@ -17,7 +17,7 @@
 - In the example on the page, the Linux penguin contains uniform areas of color which is easily seen in the processed image.
 - Although ECB is not secure at all, I was wondering of its use for music and sounds, and to perhaps create a synth that takes in a sample, encrypts it using ECB and spits it out.
 - I did some research on .wav headers, and found a [promising StackOverflow link](https://stackoverflow.com/questions/55420292/remove-file-header-from-a-wav-file-in-python3) about how to extract the header and modify the data in Python. I will do more research later.
-- The talk of PCM buffers also had me thinking about my voice recorder app that I released to the [App Store](https://apps.apple.com/us/app/micman/id6615062868).
+- The talk of PCM also had me thinking about my voice recorder app that I released to the [App Store](https://apps.apple.com/us/app/micman/id6615062868).
 - After recording a sound, the app uses the file's PCM buffer to extract information about the amplitudes into an array of floats, and that array of floats is used to generated rectangles on the screen with their heights corresponding to the size of the float.
 - In detail, what my app does is:
     * Retrieve the PCM buffer of the .m4a file.
@@ -31,3 +31,14 @@
 
 ## 10/14/2024
 - Introduced myself in the Introductions channel on Zulip.
+
+## 10/15/2024
+- Euler's formula kinda reminds me of Fourier's [original sine and cosine trasforms](https://en.wikipedia.org/wiki/Sine_and_cosine_transforms), where the cosine represents the even part of the function (like how in Euler's forumla, the cosine represents the real part), and the sine represents the odd part (in Euler's formula, the sine represents the imaginary part.) I just thought it was an interesting parallel.
+- This talk of Fourier transforms reminds me of a project I did in high school.
+- In that project, I used Fourier Transforms on the guitar riffs of songs to find out the specific notes that the guitarist was playing.
+- Admittedly, I didn't really know what was going on back then but to learn about it again now puts it into context!
+- Of course it wasn't very succesful since I forgot about the overtones guitar has as an instrument.
+- I tried it again today by playing an E major chord on guitar and the plot spectrum in Audacity was riddled with overtones and other notes.
+- However, I guess that's what gives guitar its unique and rich sound.
+- I tried it once more by playing a single note (E flat/D sharp) and the frequency spectrum was interesting. Although it had a lot of overtones still, a lot of the peaks were D# notes.
+- ![Spectrum for D Sharp note](https://i.imgur.com/booFVRy.png)
