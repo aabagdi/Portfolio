@@ -27,7 +27,7 @@
     * Normalize the samples so that they fit within the range [0, 1].
     * Return an array of floats from that processed data.
     * Uses SwiftUI (Apple's UI framework) to draw a set of 128 rectangles with their heights corresponding to the size of the float.
-- I got a lot of help with that code  from both online and LLM sources, so before learning about the buffer I wasn't exactly sure what was going on but now I have a clearer picture of what's happening under the hood.
+- I got a lot of help with that code from both online and LLM sources, so before learning about the buffer I wasn't exactly sure what was going on but now I have a clearer picture of what's happening under the hood.
 
 ## 10/14/2024
 - Introduced myself in the Introductions channel on Zulip.
@@ -38,7 +38,26 @@
 - In that project, I used Fourier Transforms on the guitar riffs of songs to find out the specific notes that the guitarist was playing.
 - Admittedly, I didn't really know what was going on back then but to learn about it again now puts it into context!
 - Of course it wasn't very succesful since I forgot about the overtones guitar has as an instrument.
-- I tried it again today by playing an E major chord on guitar and the plot spectrum in Audacity was riddled with overtones and other notes.
+- I tried it again today by playing an E major chord on guitar and the plot spectrum in Audacity was riddled with overtones and other notes not in the chord.
 - However, I guess that's what gives guitar its unique and rich sound.
 - I tried it once more by playing a single note (E flat/D sharp) and the frequency spectrum was interesting. Although it had a lot of overtones still, a lot of the peaks were D# notes.
 - ![Spectrum for D Sharp note](https://i.imgur.com/booFVRy.png)
+
+## 10/29/2024
+- Today I got a prototype for the ECB sound encryption working.
+- However, it just seems to produce white noise.
+- I'll have to investigate further.
+- Regarding the tone control assignment, I will look into it this weekend as I'm rather busy this week.
+- I think it'll just be an issue of performing an FFT on the sounds, extracting the frequency bins and making filters for the low, mid, and high bands. 
+
+## 01/11/2024
+- I'm struggling a bit to figuring out how to work scipy.fft.
+- I'm having issues understanding how rfftfreq works.
+- I will look more into this tomorrow.
+
+## 02/11/2024
+- I realized my FFT approach was going to be quite messy.
+- I instead decided to use `scipy.signal.butter` to create the filter.
+- I will admit I got a little help from Claude 3.5 with this, I was feeling overwhelmed with the amount of filter options in `scipy.signal`.
+- What my code does is create a Butterworth filter for each band, (the bass and treble ones being low and high pass, while the mids are bandpass), returns those filter coefficients, and uses `scipy.signal.filtfilt` to apply those filter coefficients to the .wav file.
+- The advantage of using `scipy.signal.filtfilt` is mainly the fact that it does a forward and a backwards pass, which cancels out phase delays, as well as the fact that since it runs twice, it has double the filter order.
