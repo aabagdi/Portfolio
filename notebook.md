@@ -50,19 +50,19 @@
 - Regarding the tone control assignment, I will look into it this weekend as I'm rather busy this week.
 - I think it'll just be an issue of performing an FFT on the sounds, extracting the frequency bins and making filters for the low, mid, and high bands. 
 
-## 01/11/2024
+## 11/01/2024
 - I'm struggling a bit to figuring out how to work scipy.fft.
 - I'm having issues understanding how rfftfreq works.
 - I will look more into this tomorrow.
 
-## 02/11/2024
+## 11/02/2024
 - I realized my FFT approach was going to be quite messy.
 - I instead decided to use `scipy.signal.butter` to create the filter.
 - I will admit I got a little help from Claude 3.5 with this, I was feeling overwhelmed with the amount of filter options in `scipy.signal`.
 - What my code does is create a Butterworth filter for each band, (the bass and treble ones being low and high pass, while the mids are bandpass), returns those filter coefficients, and uses `scipy.signal.filtfilt` to apply those filter coefficients to the .wav file.
 - The advantage of using `scipy.signal.filtfilt` is mainly the fact that it does a forward and a backwards pass, which cancels out phase delays, as well as the fact that since it runs twice, it has double the filter order.
 
-## 13/11/2024
+## 11/13/2024
 - I figured out my ECB effect.
 - Turns out in order to get an audible effect, the input sound as to a.) be periodic and b.) be quantized in order to exaggerate patterns. This is making me think that rather than a VST, I want to make a synthesizer using this effect as my project.
 - I'm thinking that the parameters be the note, the encryption key (optional) and the wave shape.
