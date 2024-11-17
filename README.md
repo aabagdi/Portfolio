@@ -10,3 +10,6 @@
 
 ## 11/13/2024
 - Updated notebook.md and ECBTest
+
+## 11/17/2024
+- Updated notebook.md

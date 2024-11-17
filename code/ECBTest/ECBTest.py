@@ -31,6 +31,35 @@ def process_audio_file(input_file):
         print(f"Error processing audio file: {e}")
         sys.exit(1)
 
+def normalize_audio(encrypted_audio, original_audio):
+    """Normalize encrypted audio to match the amplitude range of the original audio"""
+    # Convert to float for calculations
+    encrypted_float = encrypted_audio.astype(np.float32)
+    original_float = original_audio.astype(np.float32)
+    
+    # Calculate RMS values
+    if len(original_audio.shape) > 1:
+        # Stereo
+        original_rms = np.sqrt(np.mean(original_float**2, axis=0))
+        encrypted_rms = np.sqrt(np.mean(encrypted_float**2, axis=0))
+        
+        # Calculate scaling factors for each channel
+        scaling_factors = original_rms / encrypted_rms
+        
+        # Apply scaling to each channel
+        normalized = encrypted_float * scaling_factors
+    else:
+        # Mono
+        original_rms = np.sqrt(np.mean(original_float**2))
+        encrypted_rms = np.sqrt(np.mean(encrypted_float**2))
+        
+        # Calculate and apply scaling factor
+        scaling_factor = original_rms / encrypted_rms
+        normalized = encrypted_float * scaling_factor
+    
+    # Clip to int16 range and convert back
+    return np.clip(normalized, -32768, 32767).astype(np.int16)
+
 def quantize_audio(audio_data, levels=32):
     """Quantize audio into distinct levels to create more visible patterns"""
     # Convert to float between -1 and 1
@@ -140,9 +169,12 @@ def main():
         if len(encrypted_audio) > trimmed_length:
             encrypted_audio = encrypted_audio[:trimmed_length]
     
+    # Normalize the encrypted audio to match original amplitude
+    normalized_audio = normalize_audio(encrypted_audio, quantized_audio)
+    
     try:
         # Save encrypted version
-        wavfile.write(f"{output_prefix}_encrypted.wav", sample_rate, encrypted_audio)
+        wavfile.write(f"{output_prefix}_encrypted.wav", sample_rate, normalized_audio)
         print(f"Successfully created: {output_prefix}_encrypted.wav")
         print(f"Output maintains original sample rate of {sample_rate} Hz")
         print(f"Channels: {'Stereo' if is_stereo else 'Mono'}")

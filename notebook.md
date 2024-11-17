@@ -67,3 +67,8 @@
 - Turns out in order to get an audible effect, the input sound as to a.) be periodic and b.) be quantized in order to exaggerate patterns. This is making me think that rather than a VST, I want to make a synthesizer using this effect as my project.
 - I'm thinking that the parameters be the note, the encryption key (optional) and the wave shape.
 - When we learn about synthesis and MIDI I will try that out with my ECB effect (although I'll have to modify it to take a MIDI stream instead of a .wav file.)
+
+## 11/17/2024
+- I am researching the MIDI message format so I can figure out how to manipulate the bits to add my ECB effect on it.
+- Using [this link](https://www.songstuff.com/recording/article/midi-message-format/), it turns out that there only the note number is transmitted, not anything that directly handles the sound.
+- I'll have to rethink my approach. Perhaps I can make a VST effect that takes in the sound? I'm not exactly sure.
