@@ -13,3 +13,4 @@
 
 ## 11/17/2024
 - Updated notebook.md
+- Added first write-up for ECBTest
