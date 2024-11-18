@@ -1,7 +1,7 @@
 ## ECBTest
 
 - Electronic codebook mode (ECB) is a block cipher mode of encryption. A block cipher mode of encryption is an algorithm that uses a block cipher (a cipher that operates on fixed-length blocks of the input, commonly something like AES) to encrypt something.
-- ECB specifically works on the blocks of data by using the same key to independently encrypt each block, and then concatenating the results together. The diagram below depicts how ECB works: ![diagram](https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/ECB_encryption.svg/512px-ECB_encryption.svg.png)
+- ECB specifically works on the blocks of data by using the same key to independently encrypt each block, and then concatenating the results together. The diagram below depicts how ECB works: ![diagram](https://i.imgur.com/WoEHdRj.png)
 - The key thing about any block cipher is that its output is deterministic given the input so that the output can be decrypted to recover the input.
 - Thus, ECB is also deterministic due to using the same block cipher for each block.
 - However, this determinism leads to some issues regarding the security of ECB: if the given input has a repeating pattern in it, by the determinsm of the block cipher, the ciphertext will also have patterns! This is depicted by this ECB encryption of the Linux penguin: ![penguin](https://i.imgur.com/4CzMItx.png)
