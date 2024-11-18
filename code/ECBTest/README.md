@@ -7,7 +7,7 @@
 - However, this determinism leads to some issues regarding the security of ECB: if the given input has a repeating pattern in it, the ciphertext will also have patterns! This is depicted by this ECB encryption of the Linux penguin: ![penguin](https://i.imgur.com/4CzMItx.png)
 - This is, obviously, horribly insecure.
 - I figured that if ECB works this way on images with patterns in them, it could work with periodic sounds!
-- Thus, the cryptographer's chagrin becomes the musiscian's mania: I've harnessed ECB to create an interesting effect on waveforms.
+- Thus, the cryptographer's chagrin becomes the musiscian's merriment: I've harnessed ECB to create an interesting effect on waveforms.
 - What this code does is take in a .wav file, and extracts the sample data.
 - It then quantizes the samples to exaggerate patterns in them.
 - It then splits the samples into 2048-sample chunks.
