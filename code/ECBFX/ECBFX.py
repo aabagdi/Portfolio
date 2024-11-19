@@ -66,16 +66,6 @@ def generate_sawtooth(amplitude, frequency, duration, sample_rate):
     return sawtooth_int16, sample_rate
 
 def generate_trapezoid_wave(amplitude, frequency, duration, sample_rate, duty_cycle=0.4):
-    """
-    Generate a bipolar trapezoid wave with specified parameters.
-    
-    Args:
-        amplitude: Wave amplitude (0.0 to 1.0)
-        frequency: Frequency in Hz
-        duration: Duration in seconds
-        sample_rate: Sample rate in Hz
-        duty_cycle: Width of the trapezoid's top and bottom as a fraction of the period (0.0 to 1.0)
-    """
     # Generate time array
     t = np.linspace(0, duration, int(sample_rate * duration))
     
