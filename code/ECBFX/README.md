@@ -21,7 +21,7 @@
 - First run `pip install -r requirements.txt`.
 - After installing the dependencies, use ECBFX as such: `ECBFX.py [-h] -s {sine,triangle,square,sawtooth} [-a AMPLITUDE] [-f FREQUENCY] [-d DURATION] [-sr SAMPLERATE] [-k KEY] [-w WET] [-o OUTPUT]`
 - `-h`: Show help message.
-- `-s`: Wave shape, either sine, triangle, square, or sawtooth.
+- `-s`: Wave shape, either sine, triangle, square, sawtooth or trapezoid.
 - `-a`: Amplitude, from 0 to 1, default 0.5.
 - `-f`: Frequency, default 440 Hz.
 - `-d`: Duration in seconds, default 3.

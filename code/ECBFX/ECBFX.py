@@ -65,6 +65,55 @@ def generate_sawtooth(amplitude, frequency, duration, sample_rate):
     
     return sawtooth_int16, sample_rate
 
+def generate_trapezoid_wave(amplitude, frequency, duration, sample_rate, duty_cycle=0.4):
+    """
+    Generate a bipolar trapezoid wave with specified parameters.
+    
+    Args:
+        amplitude: Wave amplitude (0.0 to 1.0)
+        frequency: Frequency in Hz
+        duration: Duration in seconds
+        sample_rate: Sample rate in Hz
+        duty_cycle: Width of the trapezoid's top and bottom as a fraction of the period (0.0 to 1.0)
+    """
+    # Generate time array
+    t = np.linspace(0, duration, int(sample_rate * duration))
+    
+    # Calculate the period
+    period = 1.0 / frequency
+    
+    # Create trapezoid wave
+    phase = (t % period) / period
+    rise_time = 0.2  # Rise time as fraction of period
+    fall_time = 0.2  # Fall time as fraction of period
+    
+    trapezoid = np.zeros_like(t)
+    
+    # Rising edge (from -1 to 1)
+    mask_rise = (phase < rise_time)
+    trapezoid[mask_rise] = -1.0 + (2.0 * phase[mask_rise] / rise_time)
+    
+    # Top flat part
+    mask_top = (phase >= rise_time) & (phase < rise_time + duty_cycle)
+    trapezoid[mask_top] = 1.0
+    
+    # Falling edge (from 1 to -1)
+    fall_start = rise_time + duty_cycle
+    mask_fall = (phase >= fall_start) & (phase < fall_start + fall_time)
+    trapezoid[mask_fall] = 1.0 - (2.0 * (phase[mask_fall] - fall_start) / fall_time)
+    
+    # Bottom flat part
+    mask_bottom = (phase >= fall_start + fall_time)
+    trapezoid[mask_bottom] = -1.0
+    
+    # Scale by amplitude
+    trapezoid *= amplitude
+    
+    # Convert to 16-bit integer
+    trapezoid_int16 = (trapezoid * 32767).astype(np.int16)
+    
+    return trapezoid_int16, sample_rate
+
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
@@ -74,7 +123,7 @@ def parse_arguments():
     
     parser.add_argument(
         '-s', '--shape',
-        choices=['sine', 'triangle', 'square', 'sawtooth'],
+        choices=['sine', 'triangle', 'square', 'sawtooth', 'trapezoid'],
         required=True,
         help='Wave shape to generate'
     )
@@ -132,19 +181,79 @@ def parse_arguments():
 
     return args
 
-def normalize_audio(encrypted_audio, original_audio):
-    """Normalize encrypted audio to match the amplitude range of the original audio"""
+def normalize_audio(encrypted_audio, original_audio, wave_shape):
+    """
+    Normalize encrypted audio to match the amplitude range of the original audio,
+    with special handling for different wave shapes.
+    
+    Args:
+        encrypted_audio: The processed/encrypted audio data
+        original_audio: The reference audio data to match
+        wave_shape: The type of wave being processed ('sine', 'square', 'triangle', etc.)
+    """
     # Convert to float for calculations
     encrypted_float = encrypted_audio.astype(np.float32)
     original_float = original_audio.astype(np.float32)
     
-    # Calculate RMS values
-    original_rms = np.sqrt(np.mean(original_float**2))
-    encrypted_rms = np.sqrt(np.mean(encrypted_float**2))
+    # Different normalization strategies based on wave shape
+    if wave_shape == 'square':
+        # Square waves: use peak normalization
+        original_peak = np.max(np.abs(original_float))
+        encrypted_peak = np.max(np.abs(encrypted_float))
         
-    # Calculate and apply scaling factor
-    scaling_factor = original_rms / encrypted_rms
+        if encrypted_peak > 0:
+            scaling_factor = original_peak / encrypted_peak
+        else:
+            scaling_factor = 1.0
+            
+    elif wave_shape == 'triangle':
+        # Triangle waves: use RMS and peak normalization combination
+        original_peak = np.max(np.abs(original_float))
+        encrypted_peak = np.max(np.abs(encrypted_float))
+        original_rms = np.sqrt(np.mean(original_float**2))
+        encrypted_rms = np.sqrt(np.mean(encrypted_float**2))
+        
+        # Use a weighted combination of peak and RMS normalization
+        if encrypted_peak > 0 and encrypted_rms > 0:
+            peak_scaling = original_peak / encrypted_peak
+            rms_scaling = original_rms / encrypted_rms
+            # Weight more towards peak normalization for triangle waves
+            scaling_factor = 0.7 * peak_scaling + 0.3 * rms_scaling
+        else:
+            scaling_factor = 1.0
+            
+    elif wave_shape == 'trapezoid':
+        # Trapezoid waves: similar to triangle waves but with different weights
+        original_peak = np.max(np.abs(original_float))
+        encrypted_peak = np.max(np.abs(encrypted_float))
+        original_rms = np.sqrt(np.mean(original_float**2))
+        encrypted_rms = np.sqrt(np.mean(encrypted_float**2))
+        
+        if encrypted_peak > 0 and encrypted_rms > 0:
+            peak_scaling = original_peak / encrypted_peak
+            rms_scaling = original_rms / encrypted_rms
+            # Equal weighting for trapezoid waves
+            scaling_factor = 0.5 * peak_scaling + 0.5 * rms_scaling
+        else:
+            scaling_factor = 1.0
+            
+    else:
+        # For sine and sawtooth waves, use pure RMS normalization
+        original_rms = np.sqrt(np.mean(original_float**2))
+        encrypted_rms = np.sqrt(np.mean(encrypted_float**2))
+        
+        if encrypted_rms > 0:
+            scaling_factor = original_rms / encrypted_rms
+        else:
+            scaling_factor = 1.0
+    
+    # Apply scaling with additional amplitude safety check
     normalized = encrypted_float * scaling_factor
+    
+    # Additional safety check to prevent any samples from exceeding int16 range
+    max_val = np.max(np.abs(normalized))
+    if max_val > 32767:
+        normalized *= (32767 / max_val)
     
     # Clip to int16 range and convert back
     return np.clip(normalized, -32768, 32767).astype(np.int16)
@@ -239,6 +348,13 @@ def main():
             duration=args.duration,
             sample_rate=args.samplerate
         )
+    elif args.shape == 'trapezoid':
+            audio_data, sample_rate = generate_trapezoid_wave(
+            amplitude=args.amplitude,
+            frequency=args.frequency,
+            duration=args.duration,
+            sample_rate=args.samplerate
+        )
 
     # If wet is 0, just use the generated waveform
     if args.wet == 0:
@@ -268,10 +384,10 @@ def main():
             original_audio = original_audio[:trimmed_length]
         
         # Now do the wet/dry mix with the properly shaped arrays
-        final_audio = wet_dry_mix(encrypted_audio, original_audio, args.wet)
+        mixed_audio = wet_dry_mix(encrypted_audio, original_audio, args.wet)
         
         # Normalize the final audio
-        final_audio = normalize_audio(final_audio, quantized_audio)
+        final_audio = normalize_audio(mixed_audio, quantized_audio, args.shape)
 
     # If output file is specified, save to WAV
     if args.output:
