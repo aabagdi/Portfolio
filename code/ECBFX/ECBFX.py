@@ -5,7 +5,7 @@ import sys
 import argparse
 import sounddevice as sd
 
-def generate_sine(amplitude, frequency, duration, sample_rate=44100):
+def generate_sine(amplitude, frequency, duration, sample_rate):
     # Generate time array
     t = np.linspace(0, duration, int(sample_rate * duration))
     
@@ -19,7 +19,7 @@ def generate_sine(amplitude, frequency, duration, sample_rate=44100):
 
     return sine_int16, sample_rate
 
-def generate_triangle_wave(amplitude, frequency, duration, sample_rate=44100):
+def generate_triangle_wave(amplitude, frequency, duration, sample_rate):
     # Calculate the number of samples
     num_samples = int(duration * sample_rate)
     
@@ -37,7 +37,7 @@ def generate_triangle_wave(amplitude, frequency, duration, sample_rate=44100):
     
     return triangle_int16, sample_rate
 
-def generate_square_wave(amplitude, frequency, duration, sample_rate=44100):
+def generate_square_wave(amplitude, frequency, duration, sample_rate):
     # Generate time points
     t = np.linspace(0, duration, int(duration * sample_rate))
     
@@ -49,7 +49,7 @@ def generate_square_wave(amplitude, frequency, duration, sample_rate=44100):
     
     return square_int16, sample_rate
 
-def generate_sawtooth(amplitude, frequency, duration, sample_rate=44100):
+def generate_sawtooth(amplitude, frequency, duration, sample_rate):
     # Generate time array
     t = np.linspace(0, duration, int(sample_rate * duration), False)
     
@@ -98,6 +98,13 @@ def parse_arguments():
         type=float,
         default=3.0,
         help='Duration in seconds'
+    )
+
+    parser.add_argument(
+        '-sr', '--samplerate',
+        type=int,
+        default=48000,
+        help='Sample rate in Hz'
     )
     
     parser.add_argument(
@@ -161,11 +168,11 @@ def reshape_for_encryption(audio_data):
     # Use fixed chunk size - 2048 samples per chunk (4096 bytes)
     CHUNK_SIZE = 2048
 
-    # Mono audio
     num_chunks = len(audio_data) // CHUNK_SIZE
     trimmed_length = num_chunks * CHUNK_SIZE
     audio_trimmed = audio_data[:trimmed_length]
     chunks = audio_trimmed.reshape(-1, CHUNK_SIZE)
+    
     return chunks, trimmed_length
 
 def encrypt_chunk(chunk, cipher):
@@ -209,24 +216,28 @@ def main():
             amplitude=args.amplitude,
             frequency=args.frequency,
             duration=args.duration,
+            sample_rate=args.samplerate
         )
     elif args.shape == 'triangle':
         audio_data, sample_rate = generate_triangle_wave(
             amplitude=args.amplitude,
             frequency=args.frequency,
             duration=args.duration,
+            sample_rate=args.samplerate
         )
     elif args.shape == 'square':
         audio_data, sample_rate = generate_square_wave(
             amplitude=args.amplitude,
             frequency=args.frequency,
             duration=args.duration,
+            sample_rate=args.samplerate
         )
     elif args.shape == 'sawtooth':
         audio_data, sample_rate = generate_sawtooth(
             amplitude=args.amplitude,
             frequency=args.frequency,
             duration=args.duration,
+            sample_rate=args.samplerate
         )
 
     # If wet is 0, just use the generated waveform
