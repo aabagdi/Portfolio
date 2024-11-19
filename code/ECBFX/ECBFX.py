@@ -172,15 +172,6 @@ def parse_arguments():
     return args
 
 def normalize_audio(encrypted_audio, original_audio, wave_shape):
-    """
-    Normalize encrypted audio to match the amplitude range of the original audio,
-    with special handling for different wave shapes.
-    
-    Args:
-        encrypted_audio: The processed/encrypted audio data
-        original_audio: The reference audio data to match
-        wave_shape: The type of wave being processed ('sine', 'square', 'triangle', etc.)
-    """
     # Convert to float for calculations
     encrypted_float = encrypted_audio.astype(np.float32)
     original_float = original_audio.astype(np.float32)
