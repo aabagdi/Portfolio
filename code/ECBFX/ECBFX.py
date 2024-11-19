@@ -228,6 +228,8 @@ def process_chunks(chunks, key):
 def wet_dry_mix(encrypted_data, input_data, knob):
     """Mix between encrypted (wet) and original (dry) signals
     knob: 0.0 = 100% dry, 1.0 = 100% wet"""
+    if knob > 1:
+        knob = 1
     out = (encrypted_data * knob) + (input_data * (1 - knob))
     return out
 
