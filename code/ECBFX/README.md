@@ -11,7 +11,7 @@
 - It then quantizes the samples to exaggerate patterns in them.
 - It then splits the samples into 2048-sample chunks.
 - It then uses a key to encrypt each chunk.
-- It then does a wet/dry mix (if provided).
+- It then does a wet/dry mix.
 - It then normalizes the encrypted audio to keep the amplitude the same as the original generated waveform.
 - Finally, it either writes a new .wav file with the new, encrypted samples or plays from the command line.
 - This produces an almost buzzsaw-esque distortion on waveforms.
