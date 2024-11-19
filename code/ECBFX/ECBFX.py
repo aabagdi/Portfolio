@@ -83,27 +83,27 @@ def parse_arguments():
         '-a', '--amplitude',
         type=float,
         default=0.5,
-        help='Amplitude of the wave (0.0 to 1.0, default: 0.5)'
+        help='Amplitude of the wave (0.0 to 1.0)'
     )
     
     parser.add_argument(
         '-f', '--frequency',
         type=float,
         default=440.0,
-        help='Frequency in Hz (default: 440 Hz)'
+        help='Frequency in Hz'
     )
     
     parser.add_argument(
         '-d', '--duration',
         type=float,
         default=3.0,
-        help='Duration in seconds (default: 3.0)'
+        help='Duration in seconds'
     )
     
     parser.add_argument(
         '-k', '--key',
         default='4321432143214321',
-        help='16-byte encryption key (default: 4321432143214321)'
+        help='16-byte encryption key'
     )
 
     parser.add_argument(
