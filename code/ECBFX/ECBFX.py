@@ -132,24 +132,12 @@ def normalize_audio(encrypted_audio, original_audio):
     original_float = original_audio.astype(np.float32)
     
     # Calculate RMS values
-    if len(original_audio.shape) > 1:
-        # Stereo
-        original_rms = np.sqrt(np.mean(original_float**2, axis=0))
-        encrypted_rms = np.sqrt(np.mean(encrypted_float**2, axis=0))
+    original_rms = np.sqrt(np.mean(original_float**2))
+    encrypted_rms = np.sqrt(np.mean(encrypted_float**2))
         
-        # Calculate scaling factors for each channel
-        scaling_factors = original_rms / encrypted_rms
-        
-        # Apply scaling to each channel
-        normalized = encrypted_float * scaling_factors
-    else:
-        # Mono
-        original_rms = np.sqrt(np.mean(original_float**2))
-        encrypted_rms = np.sqrt(np.mean(encrypted_float**2))
-        
-        # Calculate and apply scaling factor
-        scaling_factor = original_rms / encrypted_rms
-        normalized = encrypted_float * scaling_factor
+    # Calculate and apply scaling factor
+    scaling_factor = original_rms / encrypted_rms
+    normalized = encrypted_float * scaling_factor
     
     # Clip to int16 range and convert back
     return np.clip(normalized, -32768, 32767).astype(np.int16)
@@ -172,24 +160,12 @@ def reshape_for_encryption(audio_data):
     """Reshape audio into larger chunks for pattern preservation"""
     # Use fixed chunk size - 2048 samples per chunk (4096 bytes)
     CHUNK_SIZE = 2048
-    
-    # Handle both mono and stereo
-    if len(audio_data.shape) == 1:
-        # Mono audio
-        num_chunks = len(audio_data) // CHUNK_SIZE
-        trimmed_length = num_chunks * CHUNK_SIZE
-        audio_trimmed = audio_data[:trimmed_length]
-        chunks = audio_trimmed.reshape(-1, CHUNK_SIZE)
-    else:
-        # Stereo audio
-        num_chunks = audio_data.shape[0] // CHUNK_SIZE
-        trimmed_length = num_chunks * CHUNK_SIZE
-        audio_trimmed = audio_data[:trimmed_length, :]
-        # Reshape each channel separately
-        left_chunks = audio_trimmed[:, 0].reshape(-1, CHUNK_SIZE)
-        right_chunks = audio_trimmed[:, 1].reshape(-1, CHUNK_SIZE)
-        chunks = (left_chunks, right_chunks)
-    
+
+    # Mono audio
+    num_chunks = len(audio_data) // CHUNK_SIZE
+    trimmed_length = num_chunks * CHUNK_SIZE
+    audio_trimmed = audio_data[:trimmed_length]
+    chunks = audio_trimmed.reshape(-1, CHUNK_SIZE)
     return chunks, trimmed_length
 
 def encrypt_chunk(chunk, cipher):
@@ -209,21 +185,11 @@ def encrypt_chunk(chunk, cipher):
 def process_chunks(chunks, key):
     """Process all chunks while preserving structure"""
     cipher = AES.new(key.encode(), AES.MODE_ECB)
-    
-    if isinstance(chunks, tuple):
-        # Stereo audio - process each channel
-        left_encrypted = []
-        right_encrypted = []
-        for left_chunk, right_chunk in zip(chunks[0], chunks[1]):
-            left_encrypted.append(encrypt_chunk(left_chunk, cipher))
-            right_encrypted.append(encrypt_chunk(right_chunk, cipher))
-        return (np.vstack(left_encrypted), np.vstack(right_encrypted))
-    else:
-        # Mono audio
-        encrypted_chunks = []
-        for chunk in chunks:
-            encrypted_chunks.append(encrypt_chunk(chunk, cipher))
-        return np.vstack(encrypted_chunks)
+
+    encrypted_chunks = []
+    for chunk in chunks:
+        encrypted_chunks.append(encrypt_chunk(chunk, cipher))
+    return np.vstack(encrypted_chunks)
     
 def wet_dry_mix(encrypted_data, input_data, knob):
     """Mix between encrypted (wet) and original (dry) signals
