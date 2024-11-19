@@ -110,7 +110,7 @@ def parse_arguments():
         '-w', '--wet',
         type=float,
         default=50,
-        help='Wet/dry knob (0 = dry, 50 = 50/50 mix, 100 = maximum wet) with logarithmic response'
+        help='Wet/dry knob (0 = dry, 50 = 50/50 mix, 100 = maximum wet)'
     )
     
     parser.add_argument(
@@ -120,29 +120,10 @@ def parse_arguments():
     
     args = parser.parse_args()
 
-    # Convert percentage to logarithmic scale
-    args.wet = logarithmic_knob(args.wet)
+    # Convert knob value to number between 0 and 1
+    args.wet *= 0.01
 
     return args
-
-def logarithmic_knob(percentage):
-    """
-    Convert linear percentage (0-100) to logarithmic scale (0-1)
-    Uses a logarithmic curve that gives finer control at lower values
-    """
-    if percentage <= 0:
-        return 0.0
-    if percentage >= 100:
-        return 1.0
-        
-    # Convert percentage to 0-1 range
-    x = percentage / 100.0
-    
-    # Apply logarithmic scaling
-    # Using the formula: y = log(ax + 1) / log(a + 1)
-    # where 'a' controls the curve shape (higher = more exponential)
-    a = 0.0000000005  # Adjustment factor for curve shape
-    return np.log(a * x + 1) / np.log(a + 1)
 
 def normalize_audio(encrypted_audio, original_audio):
     """Normalize encrypted audio to match the amplitude range of the original audio"""
