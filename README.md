@@ -14,3 +14,7 @@
 ## 11/17/2024
 - Updated notebook.md
 - Added first write-up for ECBTest
+
+## 11/18/2025
+- Updated notebook.md
+- Added ECBFX to the code folder.

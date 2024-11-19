@@ -72,3 +72,10 @@
 - I am researching the MIDI message format so I can figure out how to manipulate the bits to add my ECB effect on it.
 - Using [this link](https://www.songstuff.com/recording/article/midi-message-format/), it turns out that there only the note number is transmitted, not anything that directly handles the sound.
 - I'll have to rethink my approach. Perhaps I can make a VST effect that takes in the sound? I'm not exactly sure.
+
+## 11/18/2024
+- I modified ECBTest.py to become ECBFX.py, the difference being that a.) instead of taking a .wav file as input, it generates a waveform shape based on user input and b.) it now has a wet/dry mix control and c.) the encrypted waveform can now play from the command line.
+- It wasn't that hard to implement thanks to `sounddevice` and `argparse`.
+- The wet/dry mix is calculated by the formula `out = dry * knobValue + wet * (1 - knobValue)`.
+- Now I think my project is completed for now!
+- The usage of it is in its corresponding README.md file.
