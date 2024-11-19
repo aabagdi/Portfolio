@@ -25,6 +25,6 @@
 - `-f`: Frequency, default 440 Hz.
 - `-d`: Duration, default 3 seconds.
 - `-k`: Encryption key, has to be 16 characters long. Default is 4321432143214321. Experiment with this to get slightly different sounds!
-- `-w`: Wet/dry knob, from 0 to 100, default 50.
+- `-w`: Wet/dry knob, from 0 to 100 where 100 is fully wet, default 50.
 - `-o`: Optionally output the waveform to a .wav file with the specified filename. If not provided, the waveform will play from the terminal.
 
