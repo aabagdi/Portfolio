@@ -15,7 +15,7 @@
 - It then normalizes the encrypted audio to keep the amplitude the same as the original generated waveform.
 - Finally, it either writes a new .wav file with the new, encrypted samples or plays from the command line.
 - This produces an almost buzzsaw-esque distortion on waveforms.
-- Here is a sine waveform and its ECB counterpart in Audacity: ![encryption](https://i.imgur.com/icNrWSh.png)
+- Here is a sine waveform and its ECB counterpart in Audacity: ![encryption](https://i.imgur.com/JWr14LT.png)
 
 ## Usage
 - First run `pip install -r requirements.txt`.
