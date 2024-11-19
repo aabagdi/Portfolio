@@ -4,7 +4,7 @@
 - The key thing about any block cipher is that its output is deterministic given the input so that the output can be decrypted to recover the input.
 - Thus, ECB is also deterministic due to using the same block cipher for each block.
 - However, this determinism leads to some issues regarding the security of ECB: if the given input has a repeating pattern in it, the ciphertext will also have patterns! This is depicted by this ECB encryption of the Linux penguin: ![penguin](https://i.imgur.com/4CzMItx.png)
-- This is, obviously, horribly insecure.
+- This is, obviously, horribly insecure, and is why ECB isn't used in modern cryptography.
 - I figured that if ECB works this way on images with patterns in them, it could work with periodic sounds!
 - Thus, the cryptographer's chagrin becomes the musiscian's merriment: I've harnessed ECB to create an interesting effect on waveforms.
 - What this code does is first generate waveform samples (either a sine, triangle, square, or sawtooth wave.)
