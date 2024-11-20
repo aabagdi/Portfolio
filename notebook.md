@@ -77,5 +77,7 @@
 - I modified ECBTest.py to become ECBFX.py, the difference being that a.) instead of taking a .wav file as input, it generates a waveform shape based on user input and b.) it now has a wet/dry mix control and c.) the encrypted waveform can now play from the command line.
 - It wasn't that hard to implement thanks to `sounddevice` and `argparse`.
 - The wet/dry mix is calculated by the formula `out = dry * knobValue + wet * (1 - knobValue)`.
-- Now I think my project is completed for now!
+- I think my project is completed for now!
 - The usage of it is in its corresponding README.md file.
+- After implementing the other wave shapes, I used Claude 3.5 to help me to figure out how to add a trapezoid wave generator, just to add an esoteric wave shape to my code.
+- I also used Claude 3.5 to help me with figuring out the normalization for square, trapezoid and triangle waves, as RMS works differently for them.
