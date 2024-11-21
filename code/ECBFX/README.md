@@ -7,7 +7,7 @@
 - This is, obviously, horribly insecure, and is why ECB isn't used in modern cryptography.
 - I figured that if ECB works this way on images with patterns in them, it could work with periodic sounds!
 - Thus, the cryptographer's chagrin becomes the musiscian's merriment: I've harnessed ECB to create an interesting effect on waveforms.
-- What this code does is first generate waveform samples (either a sine, triangle, square, or sawtooth wave.)
+- What this code does is first generate waveform samples (either a sine, triangle, square, sawtooth, or trapezoid wave.)
 - It then quantizes the samples to exaggerate patterns in them.
 - It then splits the samples into 2048-sample chunks.
 - It then uses a key to encrypt each chunk.
