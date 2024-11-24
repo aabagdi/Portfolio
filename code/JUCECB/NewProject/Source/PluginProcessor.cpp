@@ -11,17 +11,26 @@
 
 //==============================================================================
 JUCECB::JUCECB()
-#ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       )
-#endif
+    : AudioProcessor(BusesProperties()
+        #if ! JucePlugin_IsMidiEffect
+         #if ! JucePlugin_IsSynth
+          .withInput("Input", juce::AudioChannelSet::stereo(), true)
+         #endif
+          .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+        #endif
+    ),
+    parameters(*this, nullptr, "Parameters",
+        {
+            std::make_unique<AudioParameterFloat>(
+                "wetdry",    // parameter ID
+                "Mix",       // parameter name
+                0.0f,        // minimum value
+                1.0f,        // maximum value
+                0.0f)        // default value (start with dry signal)
+        })
 {
+    wetDryParameter = parameters.getRawParameterValue("wetdry");
+    
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
     
@@ -105,8 +114,6 @@ void JUCECB::changeProgramName (int index, const juce::String& newName)
 void JUCECB::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     sampler.setCurrentPlaybackSampleRate(sampleRate);
-    
-    
 }
 
 void JUCECB::releaseResources()
@@ -118,14 +125,12 @@ void JUCECB::releaseResources()
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool JUCECB::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
+   #if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
-  #else
+   #else
     // This is the place where you check if the layout is supported.
     // In this template code we only support mono or stereo.
-    // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
      && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
@@ -137,27 +142,103 @@ bool JUCECB::isBusesLayoutSupported (const BusesLayout& layouts) const
    #endif
 
     return true;
-  #endif
+   #endif
 }
 #endif
 
-void JUCECB::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
+    if (!hasLoadedFile) {
+        buffer.clear();
+        return;
+    }
 
-  
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+    juce::ScopedNoDenormals noDenormals;
     
-    sampler.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+    // Process MIDI messages to update note state and pitch
+    for (const auto metadata : midiMessages) {
+        const auto msg = metadata.getMessage();
+        if (msg.isNoteOn()) {
+            isNotePlaying = true;
+            currentSamplePosition = 0;  // Reset position when note starts
+            currentMidiNote = msg.getNoteNumber();
+            // Calculate playback rate based on MIDI note
+            playbackRate = std::pow(2.0, (currentMidiNote - midiRootNote) / 12.0);
+        }
+        else if (msg.isNoteOff() && msg.getNoteNumber() == currentMidiNote) {
+            isNotePlaying = false;
+        }
+    }
+    
+    // Clear the output buffer
+    buffer.clear();
+    
+    // Only process audio if a note is playing and we haven't reached the end
+    if (isNotePlaying && currentSamplePosition < originalBuffer.getNumSamples()) {
+        // Create temporary buffer for sampler output
+        AudioBuffer<float> samplerBuffer(buffer.getNumChannels(), buffer.getNumSamples());
+        samplerBuffer.clear();
+        
+        // Get the wet/dry mix
+        float wetMix = parameters.getRawParameterValue("wetdry")->load();
+        float dryMix = 1.0f - wetMix;
+        
+        // Mix in dry signal if needed
+        if (dryMix > 0.0f) {
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+                float* channelData = buffer.getWritePointer(channel);
+                const float* originalData = originalBuffer.getReadPointer(channel);
+                
+                for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+                    // Calculate the position in the original buffer with pitch adjustment
+                    double readPosition = currentSamplePosition + (sample * playbackRate);
+                    
+                    // Check if we've reached the end of the buffer
+                    if (readPosition >= originalBuffer.getNumSamples()) {
+                        // Stop playing if we've reached the end
+                        if (sample == 0) {
+                            isNotePlaying = false;
+                        }
+                        break;
+                    }
+                    
+                    // Linear interpolation between samples
+                    int pos1 = static_cast<int>(readPosition);
+                    int pos2 = pos1 + 1;
+                    float fraction = static_cast<float>(readPosition - pos1);
+                    
+                    float sample1 = originalData[pos1];
+                    float sample2 = pos2 < originalBuffer.getNumSamples() ? originalData[pos2] : sample1;
+                    
+                    channelData[sample] = (sample1 + (sample2 - sample1) * fraction) * dryMix;
+                }
+            }
+        }
+        
+        // Process sampler (wet/encrypted signal)
+        if (wetMix > 0.0f) {
+            sampler.renderNextBlock(samplerBuffer, midiMessages, 0, buffer.getNumSamples());
+            
+            // Mix in the wet signal
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+                float* outputData = buffer.getWritePointer(channel);
+                const float* wetData = samplerBuffer.getReadPointer(channel);
+                
+                for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+                    outputData[sample] += wetData[sample] * wetMix;
+                }
+            }
+        }
+        
+        // Update position based on playback rate
+        currentSamplePosition += buffer.getNumSamples() * playbackRate;
+    }
 }
 
 //==============================================================================
 bool JUCECB::hasEditor() const
 {
-    return true; // (change this to false if you choose to not supply an editor)
+    return true;
 }
 
 juce::AudioProcessorEditor* JUCECB::createEditor()
@@ -168,20 +249,22 @@ juce::AudioProcessorEditor* JUCECB::createEditor()
 //==============================================================================
 void JUCECB::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
+    auto state = parameters.copyState();
+    std::unique_ptr<XmlElement> xml(state.createXml());
+    copyXmlToBinary(*xml, destData);
 }
 
 void JUCECB::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
+    std::unique_ptr<XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    if (xmlState.get() != nullptr)
+        parameters.replaceState(ValueTree::fromXml(*xmlState));
 }
 
-void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key) {
-    // Generate key from string
-    std::vector<uint8_t> aesKey(32, 0);
+void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
+{
+    // Generate a fixed key from the string
+    std::vector<uint8_t> aesKey(32, 0); // 256-bit key
     for (size_t i = 0; i < static_cast<size_t>(key.length()) && i < 32; ++i) {
         aesKey[i] = static_cast<uint8_t>(key[i]);
     }
@@ -196,7 +279,6 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key) {
         // Convert float samples to 16-bit integers
         std::vector<int16_t> intSamples(numSamples);
         for (int i = 0; i < numSamples; ++i) {
-            // Convert -1.0 to 1.0 range to -32768 to 32767
             intSamples[i] = static_cast<int16_t>(data[i] * 32767.0f);
         }
         
@@ -214,28 +296,27 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key) {
         // Encrypt the bytes
         std::vector<uint8_t> encryptedBytes = encryptBlockECB(bytes, aesKey);
         
-        // Convert encrypted bytes directly back to int16_t samples
+        // Convert encrypted bytes back to int16_t samples
         std::vector<int16_t> encryptedSamples(numSamples);
         memcpy(encryptedSamples.data(), encryptedBytes.data(),
                std::min(encryptedBytes.size(), encryptedSamples.size() * sizeof(int16_t)));
         
         // Store encrypted samples back in buffer
         for (int i = 0; i < numSamples; ++i) {
-            // Store directly without normalization or clamping
             data[i] = static_cast<float>(encryptedSamples[i]) / 32767.0f;
         }
     }
 }
 
-std::vector<uint8_t> JUCECB::encryptBlockECB(const std::vector<uint8_t>& data, const std::vector<uint8_t>& key) {
-    std::vector<uint8_t> encrypted(data.size() + AES_BLOCK_SIZE); // Add extra space for padding
+std::vector<uint8_t> JUCECB::encryptBlockECB(const std::vector<uint8_t>& data, const std::vector<uint8_t>& key)
+{
+    std::vector<uint8_t> encrypted(data.size() + AES_BLOCK_SIZE);
     
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
         return encrypted;
     }
     
-    // Disable padding - we handle it manually
     EVP_CIPHER_CTX_set_padding(ctx, 0);
     
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), nullptr, key.data(), nullptr) != 1) {
@@ -265,125 +346,223 @@ std::vector<uint8_t> JUCECB::encryptBlockECB(const std::vector<uint8_t>& data, c
     return encrypted;
 }
 
-void JUCECB::loadFile() {
-    FileChooser chooser { "Please load a .wav file" };
+void JUCECB::loadFile()
+{
+    WildcardFileFilter wavFilter("*.wav", String(), "WAV files");
     
-    if (chooser.browseForFileToOpen()) {
+    FileChooser chooser("Please select a WAV file",
+                       File::getSpecialLocation(File::userHomeDirectory),
+                       "*.wav",
+                       true);
+    
+    if (chooser.browseForFileToOpen())
+    {
         auto file = chooser.getResult();
         
-        // Create reader for original file
+        if (!isValidWavFile(file)) {
+            AlertWindow::showMessageBox(AlertWindow::WarningIcon,
+                                      "Invalid File",
+                                      "Please select a valid WAV file.");
+            return;
+        }
+        
         std::unique_ptr<AudioFormatReader> reader(formatManager.createReaderFor(file));
         
-        if (reader != nullptr) {
-            // Create buffer with correct size from actual file
-            AudioBuffer<float> buffer(reader->numChannels, static_cast<int>(reader->lengthInSamples));
+        if (reader != nullptr)
+        {
+            originalBuffer.setSize(reader->numChannels, reader->lengthInSamples);
+            reader->read(&originalBuffer, 0, reader->lengthInSamples, 0, true, true);
             
-            // Read the entire file into the buffer
-            reader->read(&buffer, 0, static_cast<int>(reader->lengthInSamples), 0, true, true);
+            // Create a copy for encryption
+            AudioBuffer<float> encryptedBuffer;
+            encryptedBuffer.setSize(reader->numChannels, reader->lengthInSamples);
+            encryptedBuffer.copyFrom(0, 0, originalBuffer, 0, 0, originalBuffer.getNumSamples());
+            if (originalBuffer.getNumChannels() > 1) {
+                encryptedBuffer.copyFrom(1, 0, originalBuffer, 1, 0, originalBuffer.getNumSamples());
+            }
             
-            // Encrypt the buffer
-            encryptAudioECB(buffer, "ThisIsALongerEncryptionKey1234567890");
+            // Encrypt the copy
+            encryptAudioECB(encryptedBuffer, encryptionKey);
             
-            // Create output file
+            // Save encrypted version to file (necessary for sampler)
             File outputFile = file.getSiblingFile(file.getFileNameWithoutExtension() + "_encrypted.wav");
             
-            // Set up WAV format writer
             WavAudioFormat wavFormat;
-            
-            // Create output stream
             std::unique_ptr<FileOutputStream> fileStream(outputFile.createOutputStream());
             
-            if (fileStream != nullptr) {
+            if (fileStream != nullptr)
+            {
                 std::unique_ptr<AudioFormatWriter> writer(wavFormat.createWriterFor(
-                    fileStream.release(),         // FileOutputStream
-                    reader->sampleRate,           // sample rate from original
-                    buffer.getNumChannels(),      // number of channels
-                    16,                           // bits per sample (fixed for our encryption)
-                    {},                           // metadata
-                    0                             // quality (ignored for WAV)
+                    fileStream.release(),
+                    reader->sampleRate,
+                    encryptedBuffer.getNumChannels(),
+                    16,
+                    {},
+                    0
                 ));
                 
-                if (writer != nullptr) {
-                    // Write the encrypted buffer to file using blocks
-                    const int blockSize = 4096;
-                    const int numBlocks = (buffer.getNumSamples() + blockSize - 1) / blockSize;
-                    
-                    for (int block = 0; block < numBlocks; ++block) {
-                        const int startSample = block * blockSize;
-                        const int numSamples = jmin(blockSize,
-                                                  buffer.getNumSamples() - startSample);
-                        
-                        // Write block by block
-                        writer->writeFromAudioSampleBuffer(buffer,
-                                                         startSample,
-                                                         numSamples);
-                    }
-                    
-                    // Ensure all data is written and file is properly closed
+                if (writer != nullptr)
+                {
+                    writer->writeFromAudioSampleBuffer(encryptedBuffer, 0, encryptedBuffer.getNumSamples());
                     writer.reset();
                     
-                    // Now load the encrypted file into the sampler
-                    formatReader = formatManager.createReaderFor(outputFile);
+                    // Load encrypted file into sampler
+                    formatReader.reset(formatManager.createReaderFor(outputFile));
                     
-                    if (formatReader != nullptr) {
-                        // Clear any existing sounds
+                    if (formatReader != nullptr)
+                    {
                         sampler.clearSounds();
                         
                         BigInteger range;
                         range.setRange(0, 128, true);
                         
-                        // Add the encrypted sound with modified parameters
-                        SamplerSound* sound = new SamplerSound(
+                        sampler.addSound(new SamplerSound(
                             "EncryptedSample",
                             *formatReader,
                             range,
                             60,    // root note
-                            0.0,   // attack time
-                            0.0,   // release time
+                            0.01,  // attack time
+                            0.01,  // release time
                             10.0   // maximum sample length
-                        );
+                        ));
                         
-                        sampler.addSound(sound);
-                        
-                        DBG("Encrypted file loaded into sampler successfully");
-                    } else {
-                        DBG("Failed to load encrypted file into sampler");
+                        hasLoadedFile = true;
+                        currentSamplePosition = 0;
+                        DBG("File loaded successfully");
                     }
-                } else {
-                    DBG("Failed to create writer");
                 }
-            } else {
-                DBG("Failed to create output stream");
             }
-        } else {
-            DBG("Failed to read input file");
         }
     }
 }
 
-AudioBuffer<float> JUCECB::getAudioBufferFromFile(juce::File file)
+
+bool JUCECB::isValidWavFile(const File& file)
 {
-    AudioBuffer<float> audioBuffer;
-    
-    std::unique_ptr<AudioFormatReader> reader(formatManager.createReaderFor(file));
-    
-    if (reader != nullptr) {
-        audioBuffer.setSize(reader->numChannels, reader->lengthInSamples);
-        reader->read(&audioBuffer, 0, reader->lengthInSamples, 0, true, true);
-    } else {
-        // If reading fails, create an empty buffer
-        audioBuffer.setSize(2, 0);  // default to stereo
-        DBG("Failed to read audio file: " + file.getFullPathName());
-    }
-    
-    return audioBuffer;
+    if (!file.existsAsFile()) return false;
+    if (file.getFileExtension().toLowerCase() != ".wav") return false;
+    if (!file.hasReadAccess()) return false;
+    if (file.getSize() < 44) return false;
+    return true;
 }
 
+bool JUCECB::checkWavProperties(AudioFormatReader* reader)
+{
+    if (reader == nullptr) return false;
+    
+    // Check basic properties
+    if (reader->numChannels <= 0 ||
+        reader->numChannels > 2 ||  // Only allow mono or stereo
+        reader->lengthInSamples <= 0 ||
+        reader->sampleRate <= 0) {
+        return false;
+    }
+    
+    // Check if sample rate is standard
+    const float standardRates[] = { 44100.0f, 48000.0f, 88200.0f, 96000.0f, 192000.0f };
+    bool validRate = false;
+    for (float rate : standardRates) {
+        if (std::abs(reader->sampleRate - rate) < 1.0f) {
+            validRate = true;
+            break;
+        }
+    }
+    
+    return validRate;
+}
 
+void JUCECB::stopNote()
+{
+    if (noteIsPlaying)
+    {
+        MidiBuffer midiBuffer;
+        midiBuffer.addEvent(MidiMessage::noteOff(1, currentMidiNote), 0);
+        isNotePlaying = false;
+        sampler.noteOff(1, currentMidiNote, 1.0f, true);
+        noteIsPlaying = false;
+    }
+}
 
-//==============================================================================
-// This creates new instances of the plugin..
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+void JUCECB::startNote()
+{
+    if (!noteIsPlaying && hasLoadedFile)
+    {
+        MidiBuffer midiBuffer;
+        midiBuffer.addEvent(MidiMessage::noteOn(1, currentMidiNote, (uint8_t)127), 0);
+        isNotePlaying = true;
+        currentSamplePosition = 0;
+        sampler.noteOn(1, currentMidiNote, 1.0f);
+        noteIsPlaying = true;
+    }
+}
+
+void JUCECB::reloadWithNewKey()
+{
+    // Stop any playing notes
+    stopNote();
+    
+    // Create a new encrypted version with the new key
+    AudioBuffer<float> encryptedBuffer;
+    encryptedBuffer.setSize(originalBuffer.getNumChannels(), originalBuffer.getNumSamples());
+    encryptedBuffer.copyFrom(0, 0, originalBuffer, 0, 0, originalBuffer.getNumSamples());
+    if (originalBuffer.getNumChannels() > 1) {
+        encryptedBuffer.copyFrom(1, 0, originalBuffer, 1, 0, originalBuffer.getNumSamples());
+    }
+    
+    // Encrypt with new key
+    encryptAudioECB(encryptedBuffer, encryptionKey);
+    
+    // Save to temporary file
+    File tempFile = File::getSpecialLocation(File::tempDirectory)
+                        .getNonexistentChildFile("temp_encrypted", ".wav");
+    
+    WavAudioFormat wavFormat;
+    std::unique_ptr<FileOutputStream> fileStream(tempFile.createOutputStream());
+    
+    if (fileStream != nullptr) {
+        std::unique_ptr<AudioFormatWriter> writer(wavFormat.createWriterFor(
+            fileStream.release(),
+            getSampleRate(),  // Use AudioProcessor's getSampleRate()
+            encryptedBuffer.getNumChannels(),
+            16,
+            {},
+            0
+        ));
+        
+        if (writer != nullptr) {
+            writer->writeFromAudioSampleBuffer(encryptedBuffer, 0, encryptedBuffer.getNumSamples());
+            writer.reset();
+            
+            // Load new encrypted file into sampler
+            formatReader.reset(formatManager.createReaderFor(tempFile));
+            
+            if (formatReader != nullptr) {
+                sampler.clearSounds();
+                
+                BigInteger range;
+                range.setRange(0, 128, true);
+                
+                sampler.addSound(new SamplerSound(
+                    "EncryptedSample",
+                    *formatReader,
+                    range,
+                    60,    // root note
+                    0.01,  // attack time
+                    0.01,  // release time
+                    10.0   // maximum sample length
+                ));
+                
+                currentSamplePosition = 0;
+                DBG("Reloaded with new key: " + encryptionKey);
+            }
+        }
+    }
+    
+    // Clean up temporary file
+    tempFile.deleteFile();
+}
+
+AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new JUCECB();
 }

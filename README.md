@@ -22,3 +22,6 @@
 ## 11/23/2024
 - Updated notebook.md
 - Added JUCECB to the code folder.
+
+## 11/24/2024
+- Updated notebook.md

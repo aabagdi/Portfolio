@@ -14,21 +14,28 @@
 //==============================================================================
 /**
 */
-class JUCECBEditor  : public juce::AudioProcessorEditor
+class JUCECBEditor : public juce::AudioProcessorEditor
 {
 public:
     JUCECBEditor (JUCECB&);
     ~JUCECBEditor() override;
 
-    //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
     JUCECB& audioProcessor;
-    TextButton loadButton { "Load .wav file" };
+    
+    TextButton loadButton;
+    Slider wetDrySlider;
+    Label wetDryLabel;
+    TextEditor keyInput;
+    Label keyLabel;
+    
+    std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> wetDryAttachment;
+
+    void loadButtonClicked();
+    void keyInputChanged();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JUCECBEditor)
 };

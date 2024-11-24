@@ -85,3 +85,9 @@
 ## 11/23/2024
 - I got a sampler working in JUCE, but for some reason the ECB encryption doesn't work. The outputted file is the same as the input.
 - I have to figure that out, and then add a wet/dry mix knob and then my project will be complete.
+
+## 11/24/2024
+- Somehow, after I resumed working today, the ECB encryption started working by itself. Funny how it works out like that, eh?
+- The code uses the OpenSSL library to encrypt the sound.
+- I added a wet/dry slider and a text field to change the encryption key.
+- The last thing to add is for the notes to loop when a key is held down and pitchwheel support, and then my project is complete.
