@@ -81,3 +81,7 @@
 - The usage of it is in its corresponding README.md file.
 - After implementing the other wave shapes, I used Claude 3.5 to help me to figure out how to add a trapezoid wave generator, just to add an esoteric wave shape to my code.
 - I also used Claude 3.5 to help me with figuring out the normalization for square, trapezoid and triangle waves, as RMS works differently for them.
+
+## 11/23/2024
+- I got a sampler woeking in JUCE, bur for aomw reason the ECB encryption doesn't work. The outputted file is the same as the input.
+- I have to figure that out, and then add a wet/dry mix knob and then my project will be complete.
