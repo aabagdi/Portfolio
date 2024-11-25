@@ -93,6 +93,7 @@
 - The last thing to add is for the notes to loop when a key is held down and pitchwheel support, and then my project is complete.
 
 ## 11/25/2024
-- I added looping, pitchwheel support, the ability to change the encryption key, and quantization to exagerrate patterns.
-- Thanks to the help of Claude 3.5 I figured out how to add polyphony.
+- I added looping, pitchwheel support, the ability to change the encryption key, quantization to exagerrate patterns, and polyphony.
+- Thanks to the help of Claude 3.5 I figured out how to add an envelope to remove clicking on key release.
 - Right now the plugin is mono only, and mixes stereo down to mono.
+- I will work on a README.md later.

@@ -43,13 +43,20 @@ JUCECB::JUCECB()
                 "enckey",    // parameter ID
                 "Encryption Key", // parameter name
                 juce::StringArray{"key1", "key2", "key3", "key4"},  // choices
-                0)          // default index
+                0),         // default index
+            std::make_unique<juce::AudioParameterFloat>(
+                "release",   // parameter ID
+                "Release Time", // parameter name
+                0.01f,      // minimum value (10ms)
+                2.0f,       // maximum value (2 seconds)
+                0.1f)       // default value (100ms)
         })
 {
     wetDryParameter = parameters.getRawParameterValue("wetdry");
     quantizationParameter = parameters.getRawParameterValue("quantize");
     pitchBendRangeParameter = parameters.getRawParameterValue("pbrange");
     encryptionKeyParameter = parameters.getRawParameterValue("enckey");
+    releaseTimeParameter = parameters.getRawParameterValue("release");
     
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
@@ -129,7 +136,6 @@ void JUCECB::changeProgramName (int index, const String& newName)
 //==============================================================================
 void JUCECB::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    sampler.setCurrentPlaybackSampleRate(sampleRate);
 }
 
 void JUCECB::releaseResources()
@@ -177,12 +183,12 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         if (msg.isNoteOn()) {
             double playbackRate = std::pow(2.0, (msg.getNoteNumber() - midiRootNote) / 12.0);
             float velocity = msg.getVelocity() / 127.0f;
-            voices.push_back(Voice(msg.getNoteNumber(), playbackRate, velocity));
+            voices.push_back(Voice(msg.getNoteNumber(), playbackRate, velocity, getSampleRate()));
         }
         else if (msg.isNoteOff()) {
             for (auto& voice : voices) {
-                if (voice.midiNote == msg.getNoteNumber()) {
-                    voice.isActive = false;
+                if (voice.midiNote == msg.getNoteNumber() && !voice.isReleasing) {
+                    voice.triggerRelease();
                 }
             }
         }
@@ -217,7 +223,7 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         const float* originalData = originalBuffer.getReadPointer(0);
         const float* encryptedData = encryptedBuffer.getReadPointer(0);
         
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+        for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
             double readPosition = voice.samplePosition + (sample * voice.playbackRate);
             
             while (readPosition >= originalBuffer.getNumSamples()) {
@@ -234,8 +240,10 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             float wetSample = encryptedData[pos1] +
                 (encryptedData[pos2] - encryptedData[pos1]) * fraction;
             
-            drySample *= voice.velocity;
-            wetSample *= voice.velocity;
+            // Apply velocity and envelope
+            float envelopeGain = voice.getEnvelopeGain(voice.samplePosition + sample * voice.playbackRate);
+            drySample *= voice.velocity * envelopeGain;
+            wetSample *= voice.velocity * envelopeGain;
             
             channelData[sample] = (drySample * dryMix) + (wetSample * wetMix);
         }
@@ -285,9 +293,9 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     float originalRMS = 0.0f;
     int totalSamples = buffer.getNumSamples() * buffer.getNumChannels();
     
-    for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
         const float* data = buffer.getReadPointer(channel);
-        for (int i = 0; i < buffer.getNumSamples(); ++i) {
+        for (int i = 0; i < buffer.getNumSamples(); i++) {
             originalRMS += data[i] * data[i];
         }
     }
@@ -298,9 +306,9 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     const float quantizationStep = 2.0f / numLevels; // Range is -1 to 1, so total range is 2
     
     // Quantize the buffer first
-    for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
         float* data = buffer.getWritePointer(channel);
-        for (int i = 0; i < buffer.getNumSamples(); ++i) {
+        for (int i = 0; i < buffer.getNumSamples(); i++) {
             // Quantize each sample to nearest level
             float level = std::round(data[i] / quantizationStep);
             data[i] = level * quantizationStep;
@@ -309,7 +317,7 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     
     // Generate a fixed key from the string
     std::vector<uint8_t> aesKey(32, 0); // 256-bit key
-    for (size_t i = 0; i < static_cast<size_t>(key.length()) && i < 32; ++i) {
+    for (size_t i = 0; i < static_cast<size_t>(key.length()) && i < 32; i++) {
         aesKey[i] = static_cast<uint8_t>(key[i]);
     }
     
@@ -317,12 +325,12 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     const auto numSamples = buffer.getNumSamples();
     
     // Process each channel
-    for (int channel = 0; channel < numChannels; ++channel) {
+    for (int channel = 0; channel < numChannels; channel++) {
         float* data = buffer.getWritePointer(channel);
         
         // Convert float samples to 16-bit integers
         std::vector<int16_t> intSamples(numSamples);
-        for (int i = 0; i < numSamples; ++i) {
+        for (int i = 0; i < numSamples; i++) {
             intSamples[i] = static_cast<int16_t>(data[i] * 32767.0f);
         }
         
@@ -346,16 +354,16 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
                std::min(encryptedBytes.size(), encryptedSamples.size() * sizeof(int16_t)));
         
         // Store encrypted samples back in buffer
-        for (int i = 0; i < numSamples; ++i) {
+        for (int i = 0; i < numSamples; i++) {
             data[i] = static_cast<float>(encryptedSamples[i]) / 32767.0f;
         }
     }
     
     // Calculate RMS of encrypted signal
     float encryptedRMS = 0.0f;
-    for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
         const float* data = buffer.getReadPointer(channel);
-        for (int i = 0; i < buffer.getNumSamples(); ++i) {
+        for (int i = 0; i < buffer.getNumSamples(); i++) {
             encryptedRMS += data[i] * data[i];
         }
     }
@@ -364,9 +372,9 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     // Apply normalization
     if (encryptedRMS > 0.0f) {
         const float gainFactor = originalRMS / encryptedRMS;
-        for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+        for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
             float* data = buffer.getWritePointer(channel);
-            for (int i = 0; i < buffer.getNumSamples(); ++i) {
+            for (int i = 0; i < buffer.getNumSamples(); i++) {
                 data[i] *= gainFactor;
             }
         }
@@ -447,7 +455,7 @@ void JUCECB::loadFile()
                 
                 // Average all channels
                 originalBuffer.clear();
-                for (int channel = 0; channel < reader->numChannels; ++channel) {
+                for (int channel = 0; channel < reader->numChannels; channel++) {
                     originalBuffer.addFrom(0, 0, tempBuffer, channel, 0, reader->lengthInSamples, 1.0f/reader->numChannels);
                 }
             }
@@ -511,7 +519,6 @@ void JUCECB::stopNote()
         MidiBuffer midiBuffer;
         midiBuffer.addEvent(MidiMessage::noteOff(1, currentMidiNote), 0);
         isNotePlaying = false;
-        sampler.noteOff(1, currentMidiNote, 1.0f, true);
         noteIsPlaying = false;
     }
 }
@@ -524,7 +531,6 @@ void JUCECB::startNote()
         midiBuffer.addEvent(MidiMessage::noteOn(1, currentMidiNote, (uint8_t)127), 0);
         isNotePlaying = true;
         currentSamplePosition = 0;
-        sampler.noteOn(1, currentMidiNote, 1.0f);
         noteIsPlaying = true;
     }
 }
