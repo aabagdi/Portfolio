@@ -462,9 +462,6 @@ void JUCECB::loadFile()
             encryptedBuffer.setSize(1, reader->lengthInSamples);
             encryptedBuffer.copyFrom(0, 0, originalBuffer, 0, 0, originalBuffer.getNumSamples());
             
-            // Get current quantization level
-            int quantizeLevel = static_cast<int>(quantizationParameter->load());
-            
             // Encrypt the buffer with quantization
             encryptAudioECB(encryptedBuffer, encryptionKey);
             
@@ -550,9 +547,6 @@ void JUCECB::reloadWithNewKey()
     encryptedBuffer.clear();
     encryptedBuffer.setSize(originalBuffer.getNumChannels(), originalBuffer.getNumSamples());
     encryptedBuffer.copyFrom(0, 0, originalBuffer, 0, 0, originalBuffer.getNumSamples());
-    
-    // Get current quantization level
-    int quantizeLevel = static_cast<int>(quantizationParameter->load());
     
     // Encrypt with new key
     encryptAudioECB(encryptedBuffer, encryptionKey);
