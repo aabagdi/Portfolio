@@ -91,3 +91,8 @@
 - The code uses the OpenSSL library to encrypt the sound.
 - I added a wet/dry slider and a text field to change the encryption key.
 - The last thing to add is for the notes to loop when a key is held down and pitchwheel support, and then my project is complete.
+
+## 11/25/2024
+- I added looping, pitchwheel support, the ability to change the encryption key, and quantization to exagerrate patterns.
+- Thanks to the help of Claude 3.5 I figured out how to add polyphony.
+- Right now the plugin is mono only, and mixes stereo down to mono.

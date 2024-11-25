@@ -16,7 +16,7 @@
 //==============================================================================
 /**
 */
-class JUCECB  : public juce::AudioProcessor
+class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Listener
 {
 public:
     //==============================================================================
@@ -69,6 +69,46 @@ public:
     String getCurrentKey() const { return encryptionKey; }
     void stopNote();
     void startNote();
+    
+    struct Voice {
+        int midiNote;
+        double samplePosition;
+        double basePlaybackRate;  // Store the original rate without pitchbend
+        double playbackRate;      // Actual rate including pitchbend
+        float velocity;           // Store velocity (0.0 to 1.0)
+        bool isActive;
+        
+        Voice(int note, double rate, float vel)
+            : midiNote(note),
+              samplePosition(0.0),
+              basePlaybackRate(rate),
+              playbackRate(rate),
+              velocity(vel),
+              isActive(true) {}
+    };
+    
+    void parameterValueChanged(int parameterIndex, float newValue) override
+        {
+            // Check if it's the encryption key parameter
+            if (auto* param = parameters.getParameter("enckey")) {
+                if (param->getParameterIndex() == parameterIndex) {
+                    // Convert the parameter value to a key string
+                    juce::String newKey;
+                    int keyIndex = static_cast<int>(newValue * 3.0f); // 4 choices, so multiply by 3
+                    switch(keyIndex) {
+                        case 0: newKey = "key1"; break;
+                        case 1: newKey = "key2"; break;
+                        case 2: newKey = "key3"; break;
+                        case 3: newKey = "key4"; break;
+                        default: newKey = "key1";
+                    }
+                    encryptionKey = newKey;
+                    reloadWithNewKey();
+                }
+            }
+        }
+        
+        void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
 
     // Audio parameters
     juce::AudioProcessorValueTreeState parameters;
@@ -100,6 +140,7 @@ private:
     int currentSamplePosition = 0;
     AudioBuffer<float> originalBuffer;
     AudioBuffer<float> dryBuffer;
+    AudioBuffer<float> encryptedBuffer;
     
     // Pitch control
     double playbackRate = 1.0;
@@ -107,8 +148,20 @@ private:
     const int midiRootNote = 60; // The note at which we play at normal speed
     
     // Plugin state
-    String encryptionKey = "DefaultKey123";
     std::atomic<float>* wetDryParameter = nullptr;
+    
+    // Polyphony
+    std::vector<Voice> voices;
+    
+    // Quantization
+    std::atomic<float>* quantizationParameter = nullptr;
+    
+    // Pitch wheel
+    std::atomic<float>* pitchBendRangeParameter = nullptr;
+    
+    // Encryption key
+    std::atomic<float>* encryptionKeyParameter = nullptr;
+    juce::String encryptionKey = "DefaultKey123";
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JUCECB)
 };
