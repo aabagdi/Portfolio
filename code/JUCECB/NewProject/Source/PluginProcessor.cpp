@@ -39,11 +39,6 @@ JUCECB::JUCECB()
                 1.0f,       // minimum value (1 semitone)
                 24.0f,      // maximum value (2 octaves)
                 2.0f),      // default value (2 semitones)
-            std::make_unique<juce::AudioParameterChoice>(
-                "enckey",    // parameter ID
-                "Encryption Key", // parameter name
-                juce::StringArray{"key1", "key2", "key3", "key4"},  // choices
-                0),         // default index
             std::make_unique<juce::AudioParameterFloat>(
                 "release",   // parameter ID
                 "Release Time", // parameter name
@@ -55,8 +50,11 @@ JUCECB::JUCECB()
     wetDryParameter = parameters.getRawParameterValue("wetdry");
     quantizationParameter = parameters.getRawParameterValue("quantize");
     pitchBendRangeParameter = parameters.getRawParameterValue("pbrange");
-    encryptionKeyParameter = parameters.getRawParameterValue("enckey");
     releaseTimeParameter = parameters.getRawParameterValue("release");
+    
+    // Create text parameter for encryption key separately
+    encKeyParameter = new TextParameter("enckey", "Encryption Key", "DefaultKey123");
+    addParameter(encKeyParameter);
     
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();

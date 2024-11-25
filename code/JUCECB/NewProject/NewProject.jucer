@@ -37,7 +37,9 @@
         <CONFIGURATION isDebug="1" name="Debug" targetName="JUCECB" defines="JUCE_MODAL_LOOPS_PERMITTED=1"
                        headerPath="/opt/homebrew/opt/openssl/include&#10;" libraryPath="/opt/homebrew/opt/openssl/lib&#10;"
                        extraLinkerFlags="-lssl -lcrypto&#10;&#10;"/>
-        <CONFIGURATION isDebug="0" name="Release" targetName="JUCECB" headerPath="/opt/homebrew/Cellar/openssl@3/3.4.0"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="JUCECB" headerPath="/opt/homebrew/opt/openssl/include"
+                       libraryPath="/opt/homebrew/opt/openssl/lib" defines="JUCE_MODAL_LOOPS_PERMITTED=1"
+                       extraLinkerFlags="-lssl -lcrypto&#10;"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_audio_basics" path="../../../../JUCE/modules"/>

@@ -115,26 +115,53 @@ public:
         }
     };
     
-    void parameterValueChanged(int parameterIndex, float newValue) override
+    class TextParameter : public juce::AudioProcessorParameter
+    {
+    public:
+        TextParameter(const String& paramId, const String& name, const String& defaultValue)
+            : parameterID(paramId), parameterName(name), value(defaultValue) {}
+        
+        float getValue() const override { return 0.0f; }
+        void setValue(float newValue) override {}
+        float getDefaultValue() const override { return 0.0f; }
+        String getName(int maximumStringLength) const override { return parameterName; }
+        String getLabel() const override { return {}; }
+        
+        // Required virtual methods
+        float getValueForText(const String& text) const override { return 0.0f; }
+        String getText(float v, int maximumLength) const override
         {
-            // Check if it's the encryption key parameter
-            if (auto* param = parameters.getParameter("enckey")) {
-                if (param->getParameterIndex() == parameterIndex) {
-                    // Convert the parameter value to a key string
-                    juce::String newKey;
-                    int keyIndex = static_cast<int>(newValue * 3.0f); // 4 choices, so multiply by 3
-                    switch(keyIndex) {
-                        case 0: newKey = "key1"; break;
-                        case 1: newKey = "key2"; break;
-                        case 2: newKey = "key3"; break;
-                        case 3: newKey = "key4"; break;
-                        default: newKey = "key1";
-                    }
-                    encryptionKey = newKey;
-                    reloadWithNewKey();
-                }
+            return value.substring(0, maximumLength);
+        }
+        bool isDiscrete() const override { return false; }
+        bool isBoolean() const override { return false; }
+        int getNumSteps() const override { return 0; }
+        bool isMetaParameter() const override { return false; }
+        Category getCategory() const override { return Category::genericParameter; }
+        
+        void setKeyText(const String& newText)
+        {
+            value = newText;
+            sendValueChangedMessageToListeners(0.0f);
+        }
+        
+        String getKeyText() const { return value; }
+        
+    private:
+        String parameterID;
+        String parameterName;
+        String value;
+    };
+    
+    void parameterValueChanged(int parameterIndex, float newValue) override
+    {
+        if (auto* param = dynamic_cast<TextParameter*>(parameters.getParameter("enckey"))) {
+            if (param->getParameterIndex() == parameterIndex) {
+                encryptionKey = param->getKeyText();
+                reloadWithNewKey();
             }
         }
+    }
         
         void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
 
@@ -184,7 +211,7 @@ private:
     std::atomic<float>* pitchBendRangeParameter = nullptr;
     
     // Encryption key
-    std::atomic<float>* encryptionKeyParameter = nullptr;
+    TextParameter* encKeyParameter = nullptr;
     String encryptionKey = "DefaultKey123";
     
     // Envelope
