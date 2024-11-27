@@ -208,6 +208,7 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
     // File handling methods
     AudioBuffer<float> getAudioBufferFromFile(juce::File file);
     bool isValidWavFile(const File& file);
+    std::unique_ptr<FileChooser> fileChooser;
     
     // Playback state
     bool hasLoadedFile = false;

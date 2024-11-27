@@ -502,21 +502,33 @@ std::vector<uint8_t> JUCECB::encryptBlockECB(const std::vector<uint8_t>& data, c
 
 void JUCECB::loadFile()
 {
-    WildcardFileFilter wavFilter("*.wav", String(), "WAV files");
-    
-    FileChooser chooser("Please select a WAV file",
-                       File::getSpecialLocation(File::userHomeDirectory),
-                       "*.wav",
-                       true);
-    
-    if (chooser.browseForFileToOpen())
+    if (fileChooser == nullptr)
     {
-        auto file = chooser.getResult();
+        fileChooser = std::make_unique<FileChooser>(
+            "Please select a WAV file",
+            File::getSpecialLocation(File::userHomeDirectory),
+            "*.wav",
+            true
+        );
+    }
+    
+    auto chooserFlags = FileBrowserComponent::openMode |
+                       FileBrowserComponent::canSelectFiles;
+                       
+    fileChooser->launchAsync(chooserFlags, [this](const FileChooser& fc)
+    {
+        auto file = fc.getResult();
         
-        if (!isValidWavFile(file)) {
-            AlertWindow::showMessageBox(AlertWindow::WarningIcon,
-                                      "Invalid File",
-                                      "Please select a valid WAV file.");
+        if (file == File{}) // User canceled or no file selected
+        {
+            return;
+        }
+        
+        if (!isValidWavFile(file))
+        {
+            AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
+                                           "Invalid File",
+                                           "Please select a valid WAV file.");
             return;
         }
         
@@ -526,17 +538,20 @@ void JUCECB::loadFile()
         {
             // Convert to mono if necessary
             originalBuffer.setSize(1, reader->lengthInSamples);
-            if (reader->numChannels == 1) {
+            if (reader->numChannels == 1)
+            {
                 reader->read(&originalBuffer, 0, reader->lengthInSamples, 0, true, true);
             }
-            else {
+            else
+            {
                 // Mix down to mono
                 AudioBuffer<float> tempBuffer(reader->numChannels, reader->lengthInSamples);
                 reader->read(&tempBuffer, 0, reader->lengthInSamples, 0, true, true);
                 
                 // Average all channels
                 originalBuffer.clear();
-                for (int channel = 0; channel < reader->numChannels; channel++) {
+                for (int channel = 0; channel < reader->numChannels; channel++)
+                {
                     originalBuffer.addFrom(0, 0, tempBuffer, channel, 0, reader->lengthInSamples, 1.0f/reader->numChannels);
                 }
             }
@@ -552,9 +567,8 @@ void JUCECB::loadFile()
             currentSamplePosition = 0;
             DBG("File loaded successfully in mono");
         }
-    }
+    });
 }
-
 
 bool JUCECB::isValidWavFile(const File& file)
 {
