@@ -247,6 +247,9 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
     // Gain
     std::atomic<float>* gainParameter = nullptr;
     
+    // Looping
+    std::atomic<float>* loopEnabledParameter = nullptr;
+    
     // Logging
     std::unique_ptr<FileLogger> fileLogger;
     

@@ -50,7 +50,11 @@ parameters(*this, nullptr, "Parameters",
                                                 "Gain",      // parameter name
                                                 -48.0f,      // minimum value (in dB)
                                                 12.0f,       // maximum value (in dB)
-                                                0.0f)        // default value (0 dB = unity gain)
+                                                0.0f),       // default value (0 dB = unity gain)
+    std::make_unique<juce::AudioParameterBool>(
+                                               "loop",      // parameter ID
+                                               "Loop",      // parameter name
+                                               true)        // default value (enabled)
 })
 {
     wetDryParameter = parameters.getRawParameterValue("wetdry");
@@ -58,6 +62,7 @@ parameters(*this, nullptr, "Parameters",
     pitchBendRangeParameter = parameters.getRawParameterValue("pbrange");
     releaseTimeParameter = parameters.getRawParameterValue("release");
     gainParameter = parameters.getRawParameterValue("gain");
+    loopEnabledParameter = parameters.getRawParameterValue("loop");
     
     // Create text parameter for encryption key separately
     encKeyParameter = new TextParameter("enckey", "Encryption Key", "DefaultKey123");
@@ -182,7 +187,7 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         buffer.clear();
         return;
     }
-    
+
     ScopedNoDenormals noDenormals;
     static const int MAX_VOICES = 4;
     
@@ -192,16 +197,16 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
     // Clear inactive voices first
     auto oldSize = voices.size();
     voices.erase(
-                 std::remove_if(voices.begin(), voices.end(),
-                                [](const Voice& voice) {
-                                    bool shouldRemove = !voice.isActive;
-                                    if (shouldRemove) {
-                                        Logger::writeToLog("Removing inactive voice");
-                                    }
-                                    return shouldRemove;
-                                }),
-                 voices.end()
-                 );
+        std::remove_if(voices.begin(), voices.end(),
+            [](const Voice& voice) {
+                bool shouldRemove = !voice.isActive;
+                if (shouldRemove) {
+                    Logger::writeToLog("Removing inactive voice");
+                }
+                return shouldRemove;
+            }),
+        voices.end()
+    );
     if (oldSize != voices.size()) {
         Logger::writeToLog(String("Cleaned up ") + String(oldSize - voices.size()) + " voices");
     }
@@ -211,76 +216,45 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         
         if (msg.isNoteOn()) {
             Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
-                               String(" Active voices: ") + String(voices.size()));
+                              String(" Active voices: ") + String(voices.size()));
             
             // Stop any existing voices for this note
             for (auto& voice : voices) {
                 if (voice.midiNote == msg.getNoteNumber()) {
                     Logger::writeToLog(String("Stopping existing voice for note: ") +
-                                       String(msg.getNoteNumber()));
+                                     String(msg.getNoteNumber()));
                     voice.isActive = false;
                 }
             }
             
-            // Only add new voice if under the limit
-            if (msg.isNoteOn()) {
-                Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
-                                   String(" Active voices: ") + String(voices.size()));
-                
-                // Stop any existing voices for this note
-                for (auto& voice : voices) {
-                    if (voice.midiNote == msg.getNoteNumber()) {
-                        Logger::writeToLog(String("Stopping existing voice for note: ") +
-                                           String(msg.getNoteNumber()));
-                        voice.isActive = false;
-                    }
-                }
-                
-                if (msg.isNoteOn()) {
-                    Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
-                                       String(" Active voices: ") + String(voices.size()));
+            double playbackRate = std::pow(2.0, (msg.getNoteNumber() - midiRootNote) / 12.0);
+            float velocity = msg.getVelocity() / 127.0f;
+            
+            if (voices.size() >= MAX_VOICES) {
+                // Find the oldest voice
+                auto oldestVoice = std::min_element(voices.begin(), voices.end(),
+                    [](const Voice& a, const Voice& b) {
+                        return a.attackStart < b.attackStart;
+                    });
                     
-                    // Stop any existing voices for this note
-                    for (auto& voice : voices) {
-                        if (voice.midiNote == msg.getNoteNumber()) {
-                            Logger::writeToLog(String("Stopping existing voice for note: ") +
-                                               String(msg.getNoteNumber()));
-                            voice.isActive = false;
-                        }
-                    }
-                    
-                    double playbackRate = std::pow(2.0, (msg.getNoteNumber() - midiRootNote) / 12.0);
-                    float velocity = msg.getVelocity() / 127.0f;
-                    
-                    if (voices.size() >= MAX_VOICES) {
-                        // Find the oldest voice
-                        auto oldestVoice = std::min_element(voices.begin(), voices.end(),
-                                                            [](const Voice& a, const Voice& b) {
-                            return a.attackStart < b.attackStart;
-                        });
-                        
-                        Logger::writeToLog(String("Stealing oldest voice with note: ") +
-                                           String(oldestVoice->midiNote));
-                        
-                        // Replace the oldest voice with our new voice
-                        oldestVoice->midiNote = msg.getNoteNumber();
-                        oldestVoice->playbackRate = playbackRate;
-                        oldestVoice->basePlaybackRate = playbackRate;
-                        oldestVoice->velocity = velocity;
-                        oldestVoice->samplePosition = 0;
-                        oldestVoice->isReleasing = false;
-                        oldestVoice->isActive = true;
-                        oldestVoice->attackStart = oldestVoice->samplePosition;  // Fixed this line
-                    } else {
-                        voices.emplace_back(msg.getNoteNumber(), playbackRate, velocity, getSampleRate(),
-                                            originalBuffer.getNumSamples());
-                        Logger::writeToLog(String("Added new voice for note: ") +
-                                           String(msg.getNoteNumber()));
-                    }
-                }
+                Logger::writeToLog(String("Stealing oldest voice with note: ") +
+                                  String(oldestVoice->midiNote));
+                                  
+                oldestVoice->midiNote = msg.getNoteNumber();
+                oldestVoice->playbackRate = playbackRate;
+                oldestVoice->basePlaybackRate = playbackRate;
+                oldestVoice->velocity = velocity;
+                oldestVoice->samplePosition = 0;
+                oldestVoice->isReleasing = false;
+                oldestVoice->isActive = true;
+                oldestVoice->attackStart = oldestVoice->samplePosition;
+            } else {
+                voices.emplace_back(msg.getNoteNumber(), playbackRate, velocity, getSampleRate(),
+                                  originalBuffer.getNumSamples());
+                Logger::writeToLog(String("Added new voice for note: ") +
+                                  String(msg.getNoteNumber()));
             }
         }
-        
         else if (msg.isNoteOff()) {
             Logger::writeToLog(String("Note Off - Note: ") + String(msg.getNoteNumber()));
             bool foundVoice = false;
@@ -290,14 +264,14 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
                     voice.triggerRelease();
                     foundVoice = true;
                     Logger::writeToLog(String("Released voice for note: ") +
-                                       String(msg.getNoteNumber()));
+                                     String(msg.getNoteNumber()));
                     break;
                 }
             }
             
             if (!foundVoice) {
                 Logger::writeToLog(String("No active voice found for note off: ") +
-                                   String(msg.getNoteNumber()));
+                                 String(msg.getNoteNumber()));
             }
         }
         else if (msg.isPitchWheel()) {
@@ -319,11 +293,14 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
     
     float wetMix = wetDryParameter->load();
     float dryMix = 1.0f - wetMix;
+    float gainInDB = gainParameter->load();
+    float gainFactor = std::pow(10.0f, gainInDB / 20.0f);
     
     // More conservative polyphony scaling
     float polyScale = 0.5f / std::sqrt(static_cast<float>(voices.size()));
     
     AudioBuffer<float> tempBuffer(1, buffer.getNumSamples());
+    bool loopEnabled = loopEnabledParameter->load() > 0.5f;
     
     for (auto& voice : voices) {
         if (!voice.isActive) continue;
@@ -336,6 +313,12 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
             double readPosition = voice.samplePosition + (sample * voice.playbackRate);
             double nextLoopPosition = readPosition;
+            
+            // Check for sample end if not looping
+            if (!loopEnabled && readPosition >= originalBuffer.getNumSamples()) {
+                voice.isActive = false;
+                break;
+            }
             
             // Handle looping
             while (nextLoopPosition >= originalBuffer.getNumSamples()) {
@@ -368,11 +351,13 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             float wetNextSample = encryptedData[nextPos1] + (encryptedData[nextPos2] - encryptedData[nextPos1]) * nextFraction;
             
             // Crossfade near loop points
-            float distanceToEnd = originalBuffer.getNumSamples() - readPosition;
-            if (distanceToEnd < Voice::XFADE_LENGTH) {
-                float crossfadeGain = 0.5f * (1.0f + std::cos((distanceToEnd / Voice::XFADE_LENGTH) * M_PI));
-                drySample = drySample * (1.0f - crossfadeGain) + dryNextSample * crossfadeGain;
-                wetSample = wetSample * (1.0f - crossfadeGain) + wetNextSample * crossfadeGain;
+            if (loopEnabled) {
+                float distanceToEnd = originalBuffer.getNumSamples() - readPosition;
+                if (distanceToEnd < Voice::XFADE_LENGTH) {
+                    float crossfadeGain = 0.5f * (1.0f + std::cos((distanceToEnd / Voice::XFADE_LENGTH) * M_PI));
+                    drySample = drySample * (1.0f - crossfadeGain) + dryNextSample * crossfadeGain;
+                    wetSample = wetSample * (1.0f - crossfadeGain) + wetNextSample * crossfadeGain;
+                }
             }
             
             // Apply envelope
@@ -387,16 +372,18 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             voice.previousSample = finalSample;
             
             // Apply final scaling
-            float gainInDB = gainParameter->load();
-            float gainFactor = std::pow(10.0f, gainInDB / 20.0f);  // Convert dB to linear gain
             channelData[sample] = finalSample * envelopeGain * voice.velocity * polyScale * gainFactor;
         }
         
         buffer.addFrom(0, 0, tempBuffer, 0, 0, buffer.getNumSamples());
         
-        voice.samplePosition += buffer.getNumSamples() * voice.playbackRate;
-        while (voice.samplePosition >= originalBuffer.getNumSamples()) {
-            voice.samplePosition -= originalBuffer.getNumSamples();
+        if (loopEnabled) {
+            voice.samplePosition += buffer.getNumSamples() * voice.playbackRate;
+            while (voice.samplePosition >= originalBuffer.getNumSamples()) {
+                voice.samplePosition -= originalBuffer.getNumSamples();
+            }
+        } else {
+            voice.samplePosition += buffer.getNumSamples() * voice.playbackRate;
         }
     }
     

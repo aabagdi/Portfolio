@@ -33,7 +33,9 @@ private:
     Label keyLabel;
     Slider gainSlider;
     Label gainLabel;
-    
+    ToggleButton loopButton;
+        
+    std::unique_ptr<AudioProcessorValueTreeState::ButtonAttachment> loopAttachment;
     std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> gainAttachment;
     std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> wetDryAttachment;
 

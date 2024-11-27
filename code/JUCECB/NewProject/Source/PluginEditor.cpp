@@ -54,8 +54,14 @@ JUCECBEditor::JUCECBEditor (JUCECB& p)
     // Connect gain slider to parameter
     gainAttachment.reset(new AudioProcessorValueTreeState::SliderAttachment(audioProcessor.parameters, "gain", gainSlider));
     
-    // Adjust window size to accommodate new control
-    setSize(400, 240);  // Made window slightly taller
+    // Set up loop button
+    loopButton.setButtonText("Loop");
+    loopButton.setColour(ToggleButton::textColourId, Colours::white);
+    addAndMakeVisible(loopButton);
+    
+    loopAttachment.reset(new AudioProcessorValueTreeState::ButtonAttachment(audioProcessor.parameters, "loop", loopButton));
+    
+    setSize(400, 280);  // Made window slightly taller
 }
 
 JUCECBEditor::~JUCECBEditor()
@@ -105,6 +111,9 @@ void JUCECBEditor::resized()
     auto keyArea = area.removeFromTop(buttonHeight);
     keyLabel.setBounds(keyArea.removeFromLeft(labelWidth));
     keyInput.setBounds(keyArea);
+    
+    area.removeFromTop(10); // spacing
+    loopButton.setBounds(area.removeFromTop(buttonHeight));
 }
 
 void JUCECBEditor::loadButtonClicked()
