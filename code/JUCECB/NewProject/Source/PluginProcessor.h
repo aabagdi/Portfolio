@@ -244,6 +244,9 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
     // Envelope
     std::atomic<float>* releaseTimeParameter = nullptr;
     
+    // Gain
+    std::atomic<float>* gainParameter = nullptr;
+    
     // Logging
     std::unique_ptr<FileLogger> fileLogger;
     

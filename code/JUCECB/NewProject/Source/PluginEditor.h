@@ -31,7 +31,10 @@ private:
     Label wetDryLabel;
     TextEditor keyInput;
     Label keyLabel;
+    Slider gainSlider;
+    Label gainLabel;
     
+    std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> gainAttachment;
     std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> wetDryAttachment;
 
     void loadButtonClicked();

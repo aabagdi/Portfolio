@@ -2,13 +2,13 @@
 #include "PluginEditor.h"
 
 JUCECBEditor::JUCECBEditor (JUCECB& p)
-    : AudioProcessorEditor (&p), audioProcessor (p)
+: AudioProcessorEditor (&p), audioProcessor (p)
 {
     // Set up load button
     loadButton.setButtonText("Load .wav file");
     loadButton.onClick = [this] { loadButtonClicked(); };
     addAndMakeVisible(loadButton);
-
+    
     // Set up wet/dry slider
     wetDrySlider.setSliderStyle(Slider::LinearHorizontal);
     wetDrySlider.setRange(0.0f, 1.0f, 0.01f);
@@ -23,7 +23,7 @@ JUCECBEditor::JUCECBEditor (JUCECB& p)
     
     // Connect slider to parameter
     wetDryAttachment.reset(new AudioProcessorValueTreeState::SliderAttachment(
-        audioProcessor.parameters, "wetdry", wetDrySlider));
+                                                                              audioProcessor.parameters, "wetdry", wetDrySlider));
     
     // Set up key input
     keyInput.setMultiLine(false);
@@ -39,8 +39,23 @@ JUCECBEditor::JUCECBEditor (JUCECB& p)
     keyLabel.setColour(Label::textColourId, Colours::white);
     addAndMakeVisible(keyLabel);
     
-    // Set initial size
-    setSize(400, 200);
+    // Set up gain slider
+    gainSlider.setSliderStyle(Slider::LinearHorizontal);
+    gainSlider.setRange(-48.0f, 12.0f, 0.1f);
+    gainSlider.setTextBoxStyle(Slider::TextBoxRight, false, 70, 20);
+    gainSlider.setColour(Slider::textBoxTextColourId, Colours::white);
+    gainSlider.setColour(Slider::trackColourId, Colours::lightblue);
+    addAndMakeVisible(gainSlider);
+    
+    gainLabel.setText("Gain (dB)", dontSendNotification);
+    gainLabel.setColour(Label::textColourId, Colours::white);
+    addAndMakeVisible(gainLabel);
+    
+    // Connect gain slider to parameter
+    gainAttachment.reset(new AudioProcessorValueTreeState::SliderAttachment(audioProcessor.parameters, "gain", gainSlider));
+    
+    // Adjust window size to accommodate new control
+    setSize(400, 240);  // Made window slightly taller
 }
 
 JUCECBEditor::~JUCECBEditor()
@@ -78,6 +93,12 @@ void JUCECBEditor::resized()
     auto sliderArea = area.removeFromTop(sliderHeight);
     wetDryLabel.setBounds(sliderArea.removeFromLeft(labelWidth));
     wetDrySlider.setBounds(sliderArea);
+    area.removeFromTop(10); // spacing
+    
+    // Gain slider
+    auto gainArea = area.removeFromTop(sliderHeight);
+    gainLabel.setBounds(gainArea.removeFromLeft(labelWidth));
+    gainSlider.setBounds(gainArea);
     area.removeFromTop(10); // spacing
     
     // Key input

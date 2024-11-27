@@ -1,56 +1,63 @@
 /*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
+ ==============================================================================
+ 
+ This file contains the basic framework code for a JUCE plugin processor.
+ 
+ ==============================================================================
+ */
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
 //==============================================================================
 JUCECB::JUCECB()
-    : AudioProcessor(BusesProperties()
-        #if ! JucePlugin_IsMidiEffect
-         #if ! JucePlugin_IsSynth
-          .withInput("Input", juce::AudioChannelSet::mono(), true)
-         #endif
-          .withOutput("Output", juce::AudioChannelSet::mono(), true)
-        #endif
-    ),
-    parameters(*this, nullptr, "Parameters",
-        {
-            std::make_unique<juce::AudioParameterFloat>(
-                "wetdry",    // parameter ID
-                "Mix",       // parameter name
-                0.0f,        // minimum value
-                1.0f,        // maximum value
-                0.0f),       // default value
-            std::make_unique<juce::AudioParameterInt>(
-                "quantize",  // parameter ID
-                "Quantize",  // parameter name
-                2,          // minimum value (2 levels)
-                64,         // maximum value
-                16),        // default value
-            std::make_unique<juce::AudioParameterFloat>(
-                "pbrange",   // parameter ID
-                "Pitch Bend Range",  // parameter name
-                1.0f,       // minimum value (1 semitone)
-                24.0f,      // maximum value (2 octaves)
-                2.0f),      // default value (2 semitones)
-            std::make_unique<juce::AudioParameterFloat>(
-                "release",   // parameter ID
-                "Release Time", // parameter name
-                0.01f,      // minimum value (10ms)
-                2.0f,       // maximum value (2 seconds)
-                0.1f)       // default value (100ms)
-        })
+: AudioProcessor(BusesProperties()
+#if ! JucePlugin_IsMidiEffect
+#if ! JucePlugin_IsSynth
+                 .withInput("Input", juce::AudioChannelSet::mono(), true)
+#endif
+                 .withOutput("Output", juce::AudioChannelSet::mono(), true)
+#endif
+                 ),
+parameters(*this, nullptr, "Parameters",
+           {
+    std::make_unique<juce::AudioParameterFloat>(
+                                                "wetdry",    // parameter ID
+                                                "Mix",       // parameter name
+                                                0.0f,        // minimum value
+                                                1.0f,        // maximum value
+                                                0.0f),       // default value
+    std::make_unique<juce::AudioParameterInt>(
+                                              "quantize",  // parameter ID
+                                              "Quantize",  // parameter name
+                                              2,          // minimum value (2 levels)
+                                              64,         // maximum value
+                                              16),        // default value
+    std::make_unique<juce::AudioParameterFloat>(
+                                                "pbrange",   // parameter ID
+                                                "Pitch Bend Range",  // parameter name
+                                                1.0f,       // minimum value (1 semitone)
+                                                24.0f,      // maximum value (2 octaves)
+                                                2.0f),      // default value (2 semitones)
+    std::make_unique<juce::AudioParameterFloat>(
+                                                "release",   // parameter ID
+                                                "Release Time", // parameter name
+                                                0.01f,      // minimum value (10ms)
+                                                2.0f,       // maximum value (2 seconds)
+                                                0.1f),      // default value (100ms)
+    std::make_unique<juce::AudioParameterFloat>(
+                                                "gain",      // parameter ID
+                                                "Gain",      // parameter name
+                                                -48.0f,      // minimum value (in dB)
+                                                12.0f,       // maximum value (in dB)
+                                                0.0f)        // default value (0 dB = unity gain)
+})
 {
     wetDryParameter = parameters.getRawParameterValue("wetdry");
     quantizationParameter = parameters.getRawParameterValue("quantize");
     pitchBendRangeParameter = parameters.getRawParameterValue("pbrange");
     releaseTimeParameter = parameters.getRawParameterValue("release");
+    gainParameter = parameters.getRawParameterValue("gain");
     
     // Create text parameter for encryption key separately
     encKeyParameter = new TextParameter("enckey", "Encryption Key", "DefaultKey123");
@@ -81,29 +88,29 @@ const juce::String JUCECB::getName() const
 
 bool JUCECB::acceptsMidi() const
 {
-   #if JucePlugin_WantsMidiInput
+#if JucePlugin_WantsMidiInput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool JUCECB::producesMidi() const
 {
-   #if JucePlugin_ProducesMidiOutput
+#if JucePlugin_ProducesMidiOutput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool JUCECB::isMidiEffect() const
 {
-   #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 double JUCECB::getTailLengthSeconds() const
@@ -114,7 +121,7 @@ double JUCECB::getTailLengthSeconds() const
 int JUCECB::getNumPrograms()
 {
     return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    // so this should be at least 1, even if you're not really implementing programs.
 }
 
 int JUCECB::getCurrentProgram()
@@ -149,23 +156,23 @@ void JUCECB::releaseResources()
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool JUCECB::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-   #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     ignoreUnused (layouts);
     return true;
-   #else
+#else
     // This is the place where you check if the layout is supported.
     // We only support mono in this version
     if (layouts.getMainOutputChannelSet() != AudioChannelSet::mono())
         return false;
-
+    
     // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
+#if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
-   #endif
-
+#endif
+    
     return true;
-   #endif
+#endif
 }
 #endif
 
@@ -175,7 +182,7 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         buffer.clear();
         return;
     }
-
+    
     ScopedNoDenormals noDenormals;
     static const int MAX_VOICES = 4;
     
@@ -185,16 +192,16 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
     // Clear inactive voices first
     auto oldSize = voices.size();
     voices.erase(
-        std::remove_if(voices.begin(), voices.end(),
-            [](const Voice& voice) {
-                bool shouldRemove = !voice.isActive;
-                if (shouldRemove) {
-                    Logger::writeToLog("Removing inactive voice");
-                }
-                return shouldRemove;
-            }),
-        voices.end()
-    );
+                 std::remove_if(voices.begin(), voices.end(),
+                                [](const Voice& voice) {
+                                    bool shouldRemove = !voice.isActive;
+                                    if (shouldRemove) {
+                                        Logger::writeToLog("Removing inactive voice");
+                                    }
+                                    return shouldRemove;
+                                }),
+                 voices.end()
+                 );
     if (oldSize != voices.size()) {
         Logger::writeToLog(String("Cleaned up ") + String(oldSize - voices.size()) + " voices");
     }
@@ -204,13 +211,13 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         
         if (msg.isNoteOn()) {
             Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
-                              String(" Active voices: ") + String(voices.size()));
+                               String(" Active voices: ") + String(voices.size()));
             
             // Stop any existing voices for this note
             for (auto& voice : voices) {
                 if (voice.midiNote == msg.getNoteNumber()) {
                     Logger::writeToLog(String("Stopping existing voice for note: ") +
-                                     String(msg.getNoteNumber()));
+                                       String(msg.getNoteNumber()));
                     voice.isActive = false;
                 }
             }
@@ -218,26 +225,26 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             // Only add new voice if under the limit
             if (msg.isNoteOn()) {
                 Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
-                                  String(" Active voices: ") + String(voices.size()));
+                                   String(" Active voices: ") + String(voices.size()));
                 
                 // Stop any existing voices for this note
                 for (auto& voice : voices) {
                     if (voice.midiNote == msg.getNoteNumber()) {
                         Logger::writeToLog(String("Stopping existing voice for note: ") +
-                                         String(msg.getNoteNumber()));
+                                           String(msg.getNoteNumber()));
                         voice.isActive = false;
                     }
                 }
                 
                 if (msg.isNoteOn()) {
                     Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
-                                      String(" Active voices: ") + String(voices.size()));
+                                       String(" Active voices: ") + String(voices.size()));
                     
                     // Stop any existing voices for this note
                     for (auto& voice : voices) {
                         if (voice.midiNote == msg.getNoteNumber()) {
                             Logger::writeToLog(String("Stopping existing voice for note: ") +
-                                             String(msg.getNoteNumber()));
+                                               String(msg.getNoteNumber()));
                             voice.isActive = false;
                         }
                     }
@@ -248,13 +255,13 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
                     if (voices.size() >= MAX_VOICES) {
                         // Find the oldest voice
                         auto oldestVoice = std::min_element(voices.begin(), voices.end(),
-                            [](const Voice& a, const Voice& b) {
-                                return a.attackStart < b.attackStart;
-                            });
-                            
+                                                            [](const Voice& a, const Voice& b) {
+                            return a.attackStart < b.attackStart;
+                        });
+                        
                         Logger::writeToLog(String("Stealing oldest voice with note: ") +
-                                          String(oldestVoice->midiNote));
-                                          
+                                           String(oldestVoice->midiNote));
+                        
                         // Replace the oldest voice with our new voice
                         oldestVoice->midiNote = msg.getNoteNumber();
                         oldestVoice->playbackRate = playbackRate;
@@ -266,9 +273,9 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
                         oldestVoice->attackStart = oldestVoice->samplePosition;  // Fixed this line
                     } else {
                         voices.emplace_back(msg.getNoteNumber(), playbackRate, velocity, getSampleRate(),
-                                          originalBuffer.getNumSamples());
+                                            originalBuffer.getNumSamples());
                         Logger::writeToLog(String("Added new voice for note: ") +
-                                          String(msg.getNoteNumber()));
+                                           String(msg.getNoteNumber()));
                     }
                 }
             }
@@ -283,14 +290,14 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
                     voice.triggerRelease();
                     foundVoice = true;
                     Logger::writeToLog(String("Released voice for note: ") +
-                                     String(msg.getNoteNumber()));
+                                       String(msg.getNoteNumber()));
                     break;
                 }
             }
             
             if (!foundVoice) {
                 Logger::writeToLog(String("No active voice found for note off: ") +
-                                 String(msg.getNoteNumber()));
+                                   String(msg.getNoteNumber()));
             }
         }
         else if (msg.isPitchWheel()) {
@@ -380,7 +387,9 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             voice.previousSample = finalSample;
             
             // Apply final scaling
-            channelData[sample] = finalSample * envelopeGain * voice.velocity * polyScale;
+            float gainInDB = gainParameter->load();
+            float gainFactor = std::pow(10.0f, gainInDB / 20.0f);  // Convert dB to linear gain
+            channelData[sample] = finalSample * envelopeGain * voice.velocity * polyScale * gainFactor;
         }
         
         buffer.addFrom(0, 0, tempBuffer, 0, 0, buffer.getNumSamples());
@@ -534,10 +543,10 @@ std::vector<uint8_t> JUCECB::encryptBlockECB(const std::vector<uint8_t>& data, c
     int outlen2 = 0;
     
     if (EVP_EncryptUpdate(ctx,
-                         encrypted.data(),
-                         &outlen1,
-                         data.data(),
-                         static_cast<int>(data.size())) != 1) {
+                          encrypted.data(),
+                          &outlen1,
+                          data.data(),
+                          static_cast<int>(data.size())) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         return encrypted;
     }
@@ -557,18 +566,18 @@ void JUCECB::loadFile()
     if (fileChooser == nullptr)
     {
         fileChooser = std::make_unique<FileChooser>(
-            "Please select a WAV file",
-            File::getSpecialLocation(File::userHomeDirectory),
-            "*.wav",
-            true
-        );
+                                                    "Please select a WAV file",
+                                                    File::getSpecialLocation(File::userHomeDirectory),
+                                                    "*.wav",
+                                                    true
+                                                    );
     }
     
     auto chooserFlags = FileBrowserComponent::openMode |
-                       FileBrowserComponent::canSelectFiles;
-                       
+    FileBrowserComponent::canSelectFiles;
+    
     fileChooser->launchAsync(chooserFlags, [this](const FileChooser& fc)
-    {
+                             {
         auto file = fc.getResult();
         
         if (file == File{}) // User canceled or no file selected
@@ -579,8 +588,8 @@ void JUCECB::loadFile()
         if (!isValidWavFile(file))
         {
             AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
-                                           "Invalid File",
-                                           "Please select a valid WAV file.");
+                                             "Invalid File",
+                                             "Please select a valid WAV file.");
             return;
         }
         
@@ -637,13 +646,13 @@ void JUCECB::reloadWithNewKey()
     if (!hasLoadedFile) {
         return;
     }
-
+    
     // Stop any playing notes
     for (auto& voice : voices) {
         voice.isActive = false;
     }
     voices.clear();
-
+    
     // Create new encrypted version with the new key
     encryptedBuffer.clear();
     encryptedBuffer.setSize(originalBuffer.getNumChannels(), originalBuffer.getNumSamples());
