@@ -79,14 +79,14 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
         bool isActive;
         
         // Envelope parameters
-        float attackTime = 0.001f;    // Attack time in seconds
+        float attackTime = 0.01f;     // Attack time in seconds
         float releaseTime = 0.15f;    // Release time in seconds
-        float releaseLevel = 1.0f;   // Level when note off was triggered
-        double releaseStart = 0;     // Sample position when note off was triggered
-        double attackStart = 0;      // Sample position when note started
+        float releaseLevel = 1.0f;    // Level when note off was triggered
+        double releaseStart = 0;      // Sample position when note off was triggered
+        double attackStart = 0;       // Sample position when note started
         bool isReleasing = false;
         double sampleRate = 44100.0;
-        int bufferLength = 0;        // Add this to store buffer length
+        int bufferLength = 0;         // Add this to store buffer length
         static constexpr float crossfadeLength = 64; // samples
         static constexpr int XFADE_LENGTH = 512; // Longer crossfade for smoother transitions
         float previousSample = 0.0f; // Store last sample for interpolation
@@ -111,7 +111,7 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
             }
             
             if (timeSinceAttack < attackTime) {
-                // Smoother attack curve
+                // Smoother cubic curve for attack
                 float t = timeSinceAttack / attackTime;
                 attackGain = t * t * (3.0f - 2.0f * t); // Smooth cubic interpolation
             }

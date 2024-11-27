@@ -240,6 +240,9 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
                 Logger::writeToLog(String("Stealing oldest voice with note: ") +
                                   String(oldestVoice->midiNote));
                                   
+                // Apply quick fade out to previous voice
+                oldestVoice->previousSample = 0.0f;  // Reset the smoothing
+                
                 oldestVoice->midiNote = msg.getNoteNumber();
                 oldestVoice->playbackRate = playbackRate;
                 oldestVoice->basePlaybackRate = playbackRate;
@@ -314,12 +317,6 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             double readPosition = voice.samplePosition + (sample * voice.playbackRate);
             double nextLoopPosition = readPosition;
             
-            // Check for sample end if not looping
-            if (!loopEnabled && readPosition >= originalBuffer.getNumSamples()) {
-                voice.isActive = false;
-                break;
-            }
-            
             // Handle looping
             while (nextLoopPosition >= originalBuffer.getNumSamples()) {
                 nextLoopPosition -= originalBuffer.getNumSamples();
@@ -350,7 +347,22 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             float dryNextSample = originalData[nextPos1] + (originalData[nextPos2] - originalData[nextPos1]) * nextFraction;
             float wetNextSample = encryptedData[nextPos1] + (encryptedData[nextPos2] - encryptedData[nextPos1]) * nextFraction;
             
-            // Crossfade near loop points
+            // Handle non-looping sample end with envelope
+            if (!loopEnabled && readPosition >= originalBuffer.getNumSamples() - Voice::XFADE_LENGTH) {
+                float fadeOutGain = 1.0f - ((readPosition - (originalBuffer.getNumSamples() - Voice::XFADE_LENGTH)) / Voice::XFADE_LENGTH);
+                fadeOutGain = std::max(0.0f, std::min(1.0f, fadeOutGain));
+                
+                if (readPosition >= originalBuffer.getNumSamples()) {
+                    voice.isActive = false;
+                    break;
+                }
+                
+                // Apply fade out envelope to both dry and wet samples
+                drySample *= fadeOutGain;
+                wetSample *= fadeOutGain;
+            }
+            
+            // Crossfade near loop points (only if looping is enabled)
             if (loopEnabled) {
                 float distanceToEnd = originalBuffer.getNumSamples() - readPosition;
                 if (distanceToEnd < Voice::XFADE_LENGTH) {
