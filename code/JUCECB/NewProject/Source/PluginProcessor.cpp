@@ -216,15 +216,61 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             }
             
             // Only add new voice if under the limit
-            if (voices.size() < MAX_VOICES) {
-                double playbackRate = std::pow(2.0, (msg.getNoteNumber() - midiRootNote) / 12.0);
-                float velocity = msg.getVelocity() / 127.0f;
-                voices.emplace_back(msg.getNoteNumber(), playbackRate, velocity, getSampleRate(),
-                                  originalBuffer.getNumSamples());
-                Logger::writeToLog(String("Added new voice for note: ") +
-                                  String(msg.getNoteNumber()));
-            } else {
-                Logger::writeToLog("Max voices reached, note ignored");
+            if (msg.isNoteOn()) {
+                Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
+                                  String(" Active voices: ") + String(voices.size()));
+                
+                // Stop any existing voices for this note
+                for (auto& voice : voices) {
+                    if (voice.midiNote == msg.getNoteNumber()) {
+                        Logger::writeToLog(String("Stopping existing voice for note: ") +
+                                         String(msg.getNoteNumber()));
+                        voice.isActive = false;
+                    }
+                }
+                
+                if (msg.isNoteOn()) {
+                    Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
+                                      String(" Active voices: ") + String(voices.size()));
+                    
+                    // Stop any existing voices for this note
+                    for (auto& voice : voices) {
+                        if (voice.midiNote == msg.getNoteNumber()) {
+                            Logger::writeToLog(String("Stopping existing voice for note: ") +
+                                             String(msg.getNoteNumber()));
+                            voice.isActive = false;
+                        }
+                    }
+                    
+                    double playbackRate = std::pow(2.0, (msg.getNoteNumber() - midiRootNote) / 12.0);
+                    float velocity = msg.getVelocity() / 127.0f;
+                    
+                    if (voices.size() >= MAX_VOICES) {
+                        // Find the oldest voice
+                        auto oldestVoice = std::min_element(voices.begin(), voices.end(),
+                            [](const Voice& a, const Voice& b) {
+                                return a.attackStart < b.attackStart;
+                            });
+                            
+                        Logger::writeToLog(String("Stealing oldest voice with note: ") +
+                                          String(oldestVoice->midiNote));
+                                          
+                        // Replace the oldest voice with our new voice
+                        oldestVoice->midiNote = msg.getNoteNumber();
+                        oldestVoice->playbackRate = playbackRate;
+                        oldestVoice->basePlaybackRate = playbackRate;
+                        oldestVoice->velocity = velocity;
+                        oldestVoice->samplePosition = 0;
+                        oldestVoice->isReleasing = false;
+                        oldestVoice->isActive = true;
+                        oldestVoice->attackStart = oldestVoice->samplePosition;  // Fixed this line
+                    } else {
+                        voices.emplace_back(msg.getNoteNumber(), playbackRate, velocity, getSampleRate(),
+                                          originalBuffer.getNumSamples());
+                        Logger::writeToLog(String("Added new voice for note: ") +
+                                          String(msg.getNoteNumber()));
+                    }
+                }
             }
         }
         
@@ -280,13 +326,11 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         const float* originalData = originalBuffer.getReadPointer(0);
         const float* encryptedData = encryptedBuffer.getReadPointer(0);
         
-        static constexpr int XFADE_LENGTH = 512; // Even longer crossfade
-        
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
             double readPosition = voice.samplePosition + (sample * voice.playbackRate);
             double nextLoopPosition = readPosition;
             
-            // Get next loop position
+            // Handle looping
             while (nextLoopPosition >= originalBuffer.getNumSamples()) {
                 nextLoopPosition -= originalBuffer.getNumSamples();
             }
@@ -296,7 +340,7 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             int pos2 = pos1 + 1;
             float fraction = static_cast<float>(readPosition - pos1);
             
-            // Handle the main sample - wrap if needed
+            // Handle wrapping for main sample
             if (pos1 >= originalBuffer.getNumSamples()) {
                 pos1 %= originalBuffer.getNumSamples();
                 pos2 = (pos1 + 1) % originalBuffer.getNumSamples();
@@ -304,32 +348,39 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
                 pos2 = 0;
             }
             
+            // Get main samples
             float drySample = originalData[pos1] + (originalData[pos2] - originalData[pos1]) * fraction;
             float wetSample = encryptedData[pos1] + (encryptedData[pos2] - encryptedData[pos1]) * fraction;
             
-            // Always calculate the next loop's sample
+            // Calculate next loop's samples for crossfade
             int nextPos1 = static_cast<int>(nextLoopPosition);
             int nextPos2 = (nextPos1 + 1) % originalBuffer.getNumSamples();
             float nextFraction = static_cast<float>(nextLoopPosition - nextPos1);
             
-            float dryNextSample = originalData[nextPos1] +
-                (originalData[nextPos2] - originalData[nextPos1]) * nextFraction;
-            float wetNextSample = encryptedData[nextPos1] +
-                (encryptedData[nextPos2] - encryptedData[nextPos1]) * nextFraction;
+            float dryNextSample = originalData[nextPos1] + (originalData[nextPos2] - originalData[nextPos1]) * nextFraction;
+            float wetNextSample = encryptedData[nextPos1] + (encryptedData[nextPos2] - encryptedData[nextPos1]) * nextFraction;
             
-            // Calculate blend amount
+            // Crossfade near loop points
             float distanceToEnd = originalBuffer.getNumSamples() - readPosition;
-            if (distanceToEnd < XFADE_LENGTH) {
-                float blend = 0.5f * (1.0f + std::cos((distanceToEnd / XFADE_LENGTH) * M_PI));
-                drySample = drySample * (1.0f - blend) + dryNextSample * blend;
-                wetSample = wetSample * (1.0f - blend) + wetNextSample * blend;
+            if (distanceToEnd < Voice::XFADE_LENGTH) {
+                float crossfadeGain = 0.5f * (1.0f + std::cos((distanceToEnd / Voice::XFADE_LENGTH) * M_PI));
+                drySample = drySample * (1.0f - crossfadeGain) + dryNextSample * crossfadeGain;
+                wetSample = wetSample * (1.0f - crossfadeGain) + wetNextSample * crossfadeGain;
             }
             
+            // Apply envelope
             float envelopeGain = voice.getEnvelopeGain(voice.samplePosition + sample * voice.playbackRate);
-            drySample *= voice.velocity * envelopeGain * polyScale;
-            wetSample *= voice.velocity * envelopeGain * polyScale;
             
-            channelData[sample] = (drySample * dryMix) + (wetSample * wetMix);
+            // Mix wet/dry
+            float finalSample = (drySample * dryMix + wetSample * wetMix);
+            
+            // Apply smoothing to the mixed signal
+            const float smoothingFactor = 0.99f;
+            finalSample = voice.previousSample * smoothingFactor + finalSample * (1.0f - smoothingFactor);
+            voice.previousSample = finalSample;
+            
+            // Apply final scaling
+            channelData[sample] = finalSample * envelopeGain * voice.velocity * polyScale;
         }
         
         buffer.addFrom(0, 0, tempBuffer, 0, 0, buffer.getNumSamples());
@@ -339,6 +390,7 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             voice.samplePosition -= originalBuffer.getNumSamples();
         }
     }
+    
     // Log final state
     Logger::writeToLog(String("Block end - Active voices: ") + String(voices.size()));
 }

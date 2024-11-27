@@ -79,8 +79,8 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
         bool isActive;
         
         // Envelope parameters
-        float attackTime = 0.005f;    // Attack time in seconds
-        float releaseTime = 0.1f;    // Release time in seconds
+        float attackTime = 0.001f;    // Attack time in seconds
+        float releaseTime = 0.15f;    // Release time in seconds
         float releaseLevel = 1.0f;   // Level when note off was triggered
         double releaseStart = 0;     // Sample position when note off was triggered
         double attackStart = 0;      // Sample position when note started
@@ -88,6 +88,8 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
         double sampleRate = 44100.0;
         int bufferLength = 0;        // Add this to store buffer length
         static constexpr float crossfadeLength = 64; // samples
+        static constexpr int XFADE_LENGTH = 512; // Longer crossfade for smoother transitions
+        float previousSample = 0.0f; // Store last sample for interpolation
         
         Voice(int note, double rate, float vel, double sr, int buffLen)
         : midiNote(note),
@@ -101,7 +103,7 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
         bufferLength(buffLen) {}
         
         float getEnvelopeGain(double currentSamplePos) {
-            // Calculate attack phase
+            // Attack phase
             float attackGain = 1.0f;
             double timeSinceAttack = (currentSamplePos - attackStart) / sampleRate;
             if (timeSinceAttack < 0) {
@@ -109,11 +111,12 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
             }
             
             if (timeSinceAttack < attackTime) {
+                // Smoother attack curve
                 float t = timeSinceAttack / attackTime;
-                attackGain = t * t * (3.0f - 2.0f * t);
+                attackGain = t * t * (3.0f - 2.0f * t); // Smooth cubic interpolation
             }
             
-            // Calculate release phase if note is releasing
+            // Release phase
             float releaseGain = 1.0f;
             if (isReleasing) {
                 double timeSinceRelease = (currentSamplePos - releaseStart) / sampleRate;
@@ -123,10 +126,12 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
                 
                 if (timeSinceRelease >= releaseTime) {
                     isActive = false;
-                    Logger::writeToLog("Voice becoming inactive: " + String(midiNote));
                     return 0.0f;
                 }
-                releaseGain = releaseLevel * (1.0f - (float)(timeSinceRelease / releaseTime));
+                
+                // Smoother release curve
+                float t = timeSinceRelease / releaseTime;
+                releaseGain = std::pow(1.0f - t, 2.0f); // Quadratic decay
             }
             
             return attackGain * releaseGain;
