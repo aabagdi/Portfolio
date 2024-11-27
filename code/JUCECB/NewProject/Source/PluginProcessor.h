@@ -1,10 +1,10 @@
 /*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
+ ==============================================================================
+ 
+ This file contains the basic framework code for a JUCE plugin processor.
+ 
+ ==============================================================================
+ */
 
 #pragma once
 
@@ -15,47 +15,47 @@
 
 //==============================================================================
 /**
-*/
+ */
 class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Listener
 {
-public:
+    public:
     //==============================================================================
     JUCECB();
     ~JUCECB() override;
-
+    
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
-
-   #ifndef JucePlugin_PreferredChannelConfigurations
+    
+#ifndef JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
-   #endif
-
+#endif
+    
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-
+    
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
-
+    
     //==============================================================================
     const juce::String getName() const override;
-
+    
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
-
+    
     //==============================================================================
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
-
+    
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
-
+    
     // Custom public methods
     void loadFile();
     void setEncryptionKey(const String& newKey) {
@@ -79,47 +79,74 @@ public:
         bool isActive;
         
         // Envelope parameters
-        float releaseTime = 0.1f;  // Release time in seconds
-        float releaseLevel = 1.0f; // Level when note off was triggered
-        double releaseStart = 0;   // Sample position when note off was triggered
+        float attackTime = 0.005f;    // Attack time in seconds
+        float releaseTime = 0.1f;    // Release time in seconds
+        float releaseLevel = 1.0f;   // Level when note off was triggered
+        double releaseStart = 0;     // Sample position when note off was triggered
+        double attackStart = 0;      // Sample position when note started
         bool isReleasing = false;
         double sampleRate = 44100.0;
+        int bufferLength = 0;        // Add this to store buffer length
+        static constexpr float crossfadeLength = 64; // samples
         
-        Voice(int note, double rate, float vel, double sr)
-            : midiNote(note),
-              samplePosition(0.0),
-              basePlaybackRate(rate),
-              playbackRate(rate),
-              velocity(vel),
-              isActive(true),
-              sampleRate(sr) {}
+        Voice(int note, double rate, float vel, double sr, int buffLen)
+        : midiNote(note),
+        samplePosition(0.0),
+        basePlaybackRate(rate),
+        playbackRate(rate),
+        velocity(vel),
+        isActive(true),
+        attackStart(0),
+        sampleRate(sr),
+        bufferLength(buffLen) {}
         
         float getEnvelopeGain(double currentSamplePos) {
-            if (!isReleasing) {
-                return 1.0f;
+            // Calculate attack phase
+            float attackGain = 1.0f;
+            double timeSinceAttack = (currentSamplePos - attackStart) / sampleRate;
+            if (timeSinceAttack < 0) {
+                timeSinceAttack += bufferLength / sampleRate;
             }
             
-            double timeSinceRelease = (currentSamplePos - releaseStart) / sampleRate;
-            if (timeSinceRelease >= releaseTime) {
-                isActive = false;
-                return 0.0f;
+            if (timeSinceAttack < attackTime) {
+                float t = timeSinceAttack / attackTime;
+                attackGain = t * t * (3.0f - 2.0f * t);
             }
             
-            // Linear release
-            return releaseLevel * (1.0f - (float)(timeSinceRelease / releaseTime));
+            // Calculate release phase if note is releasing
+            float releaseGain = 1.0f;
+            if (isReleasing) {
+                double timeSinceRelease = (currentSamplePos - releaseStart) / sampleRate;
+                if (timeSinceRelease < 0) {
+                    timeSinceRelease += bufferLength / sampleRate;
+                }
+                
+                if (timeSinceRelease >= releaseTime) {
+                    isActive = false;
+                    Logger::writeToLog("Voice becoming inactive: " + String(midiNote));
+                    return 0.0f;
+                }
+                releaseGain = releaseLevel * (1.0f - (float)(timeSinceRelease / releaseTime));
+            }
+            
+            return attackGain * releaseGain;
         }
         
         void triggerRelease() {
             isReleasing = true;
             releaseStart = samplePosition;
+            // If releaseStart is beyond the buffer length, wrap it
+            while (releaseStart >= bufferLength) {
+                releaseStart -= bufferLength;
+            }
         }
     };
     
     class TextParameter : public juce::AudioProcessorParameter
     {
-    public:
+        public:
         TextParameter(const String& paramId, const String& name, const String& defaultValue)
-            : parameterID(paramId), parameterName(name), value(defaultValue) {}
+        : parameterID(paramId), parameterName(name), value(defaultValue) {}
         
         float getValue() const override { return 0.0f; }
         void setValue(float newValue) override {}
@@ -147,7 +174,7 @@ public:
         
         String getKeyText() const { return value; }
         
-    private:
+        private:
         String parameterID;
         String parameterName;
         String value;
@@ -162,17 +189,16 @@ public:
             }
         }
     }
-        
-        void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
-
+    
+    void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
+    
     // Audio parameters
     juce::AudioProcessorValueTreeState parameters;
-
-private:
+    
+    private:
     //==============================================================================
     // Audio format handling
     juce::AudioFormatManager formatManager;
-    std::unique_ptr<juce::AudioFormatReader> formatReader;
     
     // Encryption methods
     void encryptAudioECB(AudioBuffer<float>& buffer, const String& key);
@@ -182,21 +208,16 @@ private:
     // File handling methods
     AudioBuffer<float> getAudioBufferFromFile(juce::File file);
     bool isValidWavFile(const File& file);
-    bool checkWavProperties(AudioFormatReader* reader);
     
     // Playback state
     bool hasLoadedFile = false;
-    bool noteIsPlaying = false;
-    bool isNotePlaying = false;
     int currentSamplePosition = 0;
     AudioBuffer<float> originalBuffer;
-    AudioBuffer<float> dryBuffer;
     AudioBuffer<float> encryptedBuffer;
     
     // Pitch control
     double playbackRate = 1.0;
-    int currentMidiNote = 60; // Middle C
-    const int midiRootNote = 60; // The note at which we play at normal speed
+    const int midiRootNote = 69; // The note at which we play at normal speed, A4
     
     // Plugin state
     std::atomic<float>* wetDryParameter = nullptr;
@@ -216,6 +237,9 @@ private:
     
     // Envelope
     std::atomic<float>* releaseTimeParameter = nullptr;
-
+    
+    // Logging
+    std::unique_ptr<FileLogger> fileLogger;
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JUCECB)
 };

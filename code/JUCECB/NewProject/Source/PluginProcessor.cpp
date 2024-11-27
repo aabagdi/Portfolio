@@ -60,13 +60,17 @@ JUCECB::JUCECB()
     ERR_load_crypto_strings();
     
     formatManager.registerBasicFormats();
+    
+    File logFile = File::getSpecialLocation(File::userHomeDirectory).getChildFile("JUCECB_debug.log");
+    fileLogger = std::make_unique<FileLogger>(logFile, "JUCECB Debug Log");
+    Logger::setCurrentLogger(fileLogger.get());
 }
 
 JUCECB::~JUCECB()
 {
-    formatReader = nullptr;
     EVP_cleanup();
     ERR_free_strings();
+    Logger::setCurrentLogger(nullptr);
 }
 
 //==============================================================================
@@ -173,21 +177,74 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
     }
 
     ScopedNoDenormals noDenormals;
+    static const int MAX_VOICES = 4;
     
-    // Process MIDI messages
+    // Log current state before processing
+    Logger::writeToLog(String("Block start - Active voices: ") + String(voices.size()));
+    
+    // Clear inactive voices first
+    auto oldSize = voices.size();
+    voices.erase(
+        std::remove_if(voices.begin(), voices.end(),
+            [](const Voice& voice) {
+                bool shouldRemove = !voice.isActive;
+                if (shouldRemove) {
+                    Logger::writeToLog("Removing inactive voice");
+                }
+                return shouldRemove;
+            }),
+        voices.end()
+    );
+    if (oldSize != voices.size()) {
+        Logger::writeToLog(String("Cleaned up ") + String(oldSize - voices.size()) + " voices");
+    }
+    
     for (const auto metadata : midiMessages) {
         const auto msg = metadata.getMessage();
         
         if (msg.isNoteOn()) {
-            double playbackRate = std::pow(2.0, (msg.getNoteNumber() - midiRootNote) / 12.0);
-            float velocity = msg.getVelocity() / 127.0f;
-            voices.push_back(Voice(msg.getNoteNumber(), playbackRate, velocity, getSampleRate()));
+            Logger::writeToLog(String("Note On - Note: ") + String(msg.getNoteNumber()) +
+                              String(" Active voices: ") + String(voices.size()));
+            
+            // Stop any existing voices for this note
+            for (auto& voice : voices) {
+                if (voice.midiNote == msg.getNoteNumber()) {
+                    Logger::writeToLog(String("Stopping existing voice for note: ") +
+                                     String(msg.getNoteNumber()));
+                    voice.isActive = false;
+                }
+            }
+            
+            // Only add new voice if under the limit
+            if (voices.size() < MAX_VOICES) {
+                double playbackRate = std::pow(2.0, (msg.getNoteNumber() - midiRootNote) / 12.0);
+                float velocity = msg.getVelocity() / 127.0f;
+                voices.emplace_back(msg.getNoteNumber(), playbackRate, velocity, getSampleRate(),
+                                  originalBuffer.getNumSamples());
+                Logger::writeToLog(String("Added new voice for note: ") +
+                                  String(msg.getNoteNumber()));
+            } else {
+                Logger::writeToLog("Max voices reached, note ignored");
+            }
         }
+        
         else if (msg.isNoteOff()) {
+            Logger::writeToLog(String("Note Off - Note: ") + String(msg.getNoteNumber()));
+            bool foundVoice = false;
+            
             for (auto& voice : voices) {
                 if (voice.midiNote == msg.getNoteNumber() && !voice.isReleasing) {
                     voice.triggerRelease();
+                    foundVoice = true;
+                    Logger::writeToLog(String("Released voice for note: ") +
+                                     String(msg.getNoteNumber()));
+                    break;
                 }
+            }
+            
+            if (!foundVoice) {
+                Logger::writeToLog(String("No active voice found for note off: ") +
+                                 String(msg.getNoteNumber()));
             }
         }
         else if (msg.isPitchWheel()) {
@@ -201,47 +258,76 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         }
     }
     
-    voices.erase(
-        std::remove_if(voices.begin(), voices.end(),
-            [](const Voice& voice) { return !voice.isActive; }),
-        voices.end()
-    );
-    
     buffer.clear();
     
-    float wetMix = parameters.getRawParameterValue("wetdry")->load();
+    if (voices.empty()) {
+        return;  // Exit early if no voices to process
+    }
+    
+    float wetMix = wetDryParameter->load();
     float dryMix = 1.0f - wetMix;
+    
+    // More conservative polyphony scaling
+    float polyScale = 0.5f / std::sqrt(static_cast<float>(voices.size()));
     
     AudioBuffer<float> tempBuffer(1, buffer.getNumSamples());
     
     for (auto& voice : voices) {
-        tempBuffer.clear();
+        if (!voice.isActive) continue;
         
+        tempBuffer.clear();
         float* channelData = tempBuffer.getWritePointer(0);
         const float* originalData = originalBuffer.getReadPointer(0);
         const float* encryptedData = encryptedBuffer.getReadPointer(0);
         
+        static constexpr int XFADE_LENGTH = 512; // Even longer crossfade
+        
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
             double readPosition = voice.samplePosition + (sample * voice.playbackRate);
+            double nextLoopPosition = readPosition;
             
-            while (readPosition >= originalBuffer.getNumSamples()) {
-                readPosition -= originalBuffer.getNumSamples();
+            // Get next loop position
+            while (nextLoopPosition >= originalBuffer.getNumSamples()) {
+                nextLoopPosition -= originalBuffer.getNumSamples();
             }
             
+            // Current position interpolation
             int pos1 = static_cast<int>(readPosition);
-            int pos2 = (pos1 + 1) % originalBuffer.getNumSamples();
+            int pos2 = pos1 + 1;
             float fraction = static_cast<float>(readPosition - pos1);
             
-            float drySample = originalData[pos1] +
-                (originalData[pos2] - originalData[pos1]) * fraction;
+            // Handle the main sample - wrap if needed
+            if (pos1 >= originalBuffer.getNumSamples()) {
+                pos1 %= originalBuffer.getNumSamples();
+                pos2 = (pos1 + 1) % originalBuffer.getNumSamples();
+            } else if (pos2 >= originalBuffer.getNumSamples()) {
+                pos2 = 0;
+            }
             
-            float wetSample = encryptedData[pos1] +
-                (encryptedData[pos2] - encryptedData[pos1]) * fraction;
+            float drySample = originalData[pos1] + (originalData[pos2] - originalData[pos1]) * fraction;
+            float wetSample = encryptedData[pos1] + (encryptedData[pos2] - encryptedData[pos1]) * fraction;
             
-            // Apply velocity and envelope
+            // Always calculate the next loop's sample
+            int nextPos1 = static_cast<int>(nextLoopPosition);
+            int nextPos2 = (nextPos1 + 1) % originalBuffer.getNumSamples();
+            float nextFraction = static_cast<float>(nextLoopPosition - nextPos1);
+            
+            float dryNextSample = originalData[nextPos1] +
+                (originalData[nextPos2] - originalData[nextPos1]) * nextFraction;
+            float wetNextSample = encryptedData[nextPos1] +
+                (encryptedData[nextPos2] - encryptedData[nextPos1]) * nextFraction;
+            
+            // Calculate blend amount
+            float distanceToEnd = originalBuffer.getNumSamples() - readPosition;
+            if (distanceToEnd < XFADE_LENGTH) {
+                float blend = 0.5f * (1.0f + std::cos((distanceToEnd / XFADE_LENGTH) * M_PI));
+                drySample = drySample * (1.0f - blend) + dryNextSample * blend;
+                wetSample = wetSample * (1.0f - blend) + wetNextSample * blend;
+            }
+            
             float envelopeGain = voice.getEnvelopeGain(voice.samplePosition + sample * voice.playbackRate);
-            drySample *= voice.velocity * envelopeGain;
-            wetSample *= voice.velocity * envelopeGain;
+            drySample *= voice.velocity * envelopeGain * polyScale;
+            wetSample *= voice.velocity * envelopeGain * polyScale;
             
             channelData[sample] = (drySample * dryMix) + (wetSample * wetMix);
         }
@@ -253,11 +339,8 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             voice.samplePosition -= originalBuffer.getNumSamples();
         }
     }
-    
-    if (!voices.empty()) {
-        float scale = 1.0f / std::sqrt(static_cast<float>(voices.size()));
-        buffer.applyGain(scale);
-    }
+    // Log final state
+    Logger::writeToLog(String("Block end - Active voices: ") + String(voices.size()));
 }
 //==============================================================================
 bool JUCECB::hasEditor() const
@@ -480,54 +563,6 @@ bool JUCECB::isValidWavFile(const File& file)
     if (!file.hasReadAccess()) return false;
     if (file.getSize() < 44) return false;
     return true;
-}
-
-bool JUCECB::checkWavProperties(AudioFormatReader* reader)
-{
-    if (reader == nullptr) return false;
-    
-    // Check basic properties
-    if (reader->numChannels <= 0 ||
-        reader->numChannels > 2 ||  // Only allow mono or stereo
-        reader->lengthInSamples <= 0 ||
-        reader->sampleRate <= 0) {
-        return false;
-    }
-    
-    // Check if sample rate is standard
-    const float standardRates[] = { 44100.0f, 48000.0f, 88200.0f, 96000.0f, 192000.0f };
-    bool validRate = false;
-    for (float rate : standardRates) {
-        if (std::abs(reader->sampleRate - rate) < 1.0f) {
-            validRate = true;
-            break;
-        }
-    }
-    
-    return validRate;
-}
-
-void JUCECB::stopNote()
-{
-    if (noteIsPlaying)
-    {
-        MidiBuffer midiBuffer;
-        midiBuffer.addEvent(MidiMessage::noteOff(1, currentMidiNote), 0);
-        isNotePlaying = false;
-        noteIsPlaying = false;
-    }
-}
-
-void JUCECB::startNote()
-{
-    if (!noteIsPlaying && hasLoadedFile)
-    {
-        MidiBuffer midiBuffer;
-        midiBuffer.addEvent(MidiMessage::noteOn(1, currentMidiNote, (uint8_t)127), 0);
-        isNotePlaying = true;
-        currentSamplePosition = 0;
-        noteIsPlaying = true;
-    }
 }
 
 void JUCECB::reloadWithNewKey()
