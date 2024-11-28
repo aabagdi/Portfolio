@@ -459,7 +459,7 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     // Generate a fixed key from the string
     std::vector<uint8_t> aesKey(32, 0); // 256-bit key
     for (int i = 0; i < key.length() && i < 32; i++) {
-        aesKey[i] = key[i];
+        aesKey[static_cast<size_t>(i)] = key[i];
     }
     
     const auto numChannels = buffer.getNumChannels();
@@ -470,9 +470,9 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
         float* data = buffer.getWritePointer(channel);
         
         // Convert float samples to 16-bit integers
-        std::vector<int16_t> intSamples(numSamples);
+        std::vector<int16_t> intSamples(static_cast<size_t>(numSamples));
         for (int i = 0; i < numSamples; i++) {
-            intSamples[i] = static_cast<int16_t>(data[i] * 32767.0f);
+            intSamples[static_cast<size_t>(i)] = static_cast<int16_t>(data[i] * 32767.0f);
         }
         
         // Convert to bytes for encryption
@@ -490,13 +490,13 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
         std::vector<uint8_t> encryptedBytes = encryptBlockECB(bytes, aesKey);
         
         // Convert encrypted bytes back to int16_t samples
-        std::vector<int16_t> encryptedSamples(numSamples);
+        std::vector<int16_t> encryptedSamples(static_cast<size_t>(numSamples));
         memcpy(encryptedSamples.data(), encryptedBytes.data(),
                std::min(encryptedBytes.size(), encryptedSamples.size() * sizeof(int16_t)));
         
         // Store encrypted samples back in buffer
         for (int i = 0; i < numSamples; i++) {
-            data[i] = static_cast<float>(encryptedSamples[i]) / 32767.0f;
+            data[i] = static_cast<float>(encryptedSamples[static_cast<size_t>(i)]) / 32767.0f;
         }
     }
     
@@ -607,12 +607,12 @@ void JUCECB::loadFile()
             else
             {
                 // Mix down to mono
-                AudioBuffer<float> tempBuffer(reader->numChannels, static_cast<int>(numSamples));
+                AudioBuffer<float> tempBuffer(static_cast<int>(reader->numChannels), static_cast<int>(numSamples));
                 reader->read(&tempBuffer, 0, static_cast<int>(numSamples), 0, true, true);
                 
                 // Average all channels
                 originalBuffer.clear();
-                for (int channel = 0; channel < reader->numChannels; ++channel)
+                for (int channel = 0; channel < static_cast<int>(reader->numChannels); channel++)
                 {
                     originalBuffer.addFrom(0, 0, tempBuffer, channel, 0,
                         static_cast<int>(numSamples), 1.0f/reader->numChannels);
