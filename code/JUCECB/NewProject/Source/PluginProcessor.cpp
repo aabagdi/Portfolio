@@ -188,6 +188,19 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         return;
     }
 
+    // Add at start of processBlock
+    float maxLevel = 0.0f;
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
+        const float* data = buffer.getReadPointer(channel);
+        for (int i = 0; i < buffer.getNumSamples(); i++) {
+            maxLevel = std::max(maxLevel, std::abs(data[i]));
+        }
+    }
+    
+    if (maxLevel > 0.95f) {
+        Logger::writeToLog("Warning: High output level detected: " + String(maxLevel));
+    }
+
     ScopedNoDenormals noDenormals;
     static const int MAX_VOICES = 4;
     
@@ -442,22 +455,42 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     }
     originalRMS = std::sqrt(originalRMS / totalSamples);
     
-    // First quantize the audio
-    const int numLevels = static_cast<int>(quantizationParameter->load());
-    const float quantizationStep = 2.0f / numLevels; // Range is -1 to 1, so total range is 2
+    // First normalize the input to prevent clipping during conversion
+    float maxAbs = 0.0f;
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
+        const float* data = buffer.getReadPointer(channel);
+        for (int i = 0; i < buffer.getNumSamples(); i++) {
+            maxAbs = std::max(maxAbs, std::abs(data[i]));
+        }
+    }
     
-    // Quantize the buffer first
+    float normalizeScale = maxAbs > 0.0f ? 0.95f / maxAbs : 1.0f;
+    
+    // Apply normalization before quantization
     for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
         float* data = buffer.getWritePointer(channel);
         for (int i = 0; i < buffer.getNumSamples(); i++) {
+            data[i] *= normalizeScale;
+        }
+    }
+    
+    // Quantize with safety checks
+    const int numLevels = static_cast<int>(quantizationParameter->load());
+    const float quantizationStep = 1.9f / numLevels; // Slightly less than 2.0 for safety
+    
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
+        float* data = buffer.getWritePointer(channel);
+        for (int i = 0; i < buffer.getNumSamples(); i++) {
+            // Clamp input first
+            float clampedInput = std::max(-0.95f, std::min(0.95f, data[i]));
             // Quantize each sample to nearest level
-            float level = std::round(data[i] / quantizationStep);
+            float level = std::round(clampedInput / quantizationStep);
             data[i] = level * quantizationStep;
         }
     }
     
-    // Generate a fixed key from the string
-    std::vector<uint8_t> aesKey(32, 0); // 256-bit key
+    // Generate encryption key
+    std::vector<uint8_t> aesKey(32, 0);
     for (int i = 0; i < key.length() && i < 32; i++) {
         aesKey[static_cast<size_t>(i)] = key[i];
     }
@@ -469,10 +502,12 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     for (int channel = 0; channel < numChannels; channel++) {
         float* data = buffer.getWritePointer(channel);
         
-        // Convert float samples to 16-bit integers
+        // Convert float samples to 16-bit integers with safety scaling
         std::vector<int16_t> intSamples(static_cast<size_t>(numSamples));
         for (int i = 0; i < numSamples; i++) {
-            intSamples[static_cast<size_t>(i)] = static_cast<int16_t>(data[i] * 32767.0f);
+            // Scale to slightly less than full int16_t range for safety
+            float scaledSample = data[i] * 30000.0f;  // Using 30000 instead of 32767
+            intSamples[static_cast<size_t>(i)] = static_cast<int16_t>(std::round(scaledSample));
         }
         
         // Convert to bytes for encryption
@@ -494,9 +529,9 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
         memcpy(encryptedSamples.data(), encryptedBytes.data(),
                std::min(encryptedBytes.size(), encryptedSamples.size() * sizeof(int16_t)));
         
-        // Store encrypted samples back in buffer
+        // Convert back to float with safety scaling
         for (int i = 0; i < numSamples; i++) {
-            data[i] = static_cast<float>(encryptedSamples[static_cast<size_t>(i)]) / 32767.0f;
+            data[i] = static_cast<float>(encryptedSamples[static_cast<size_t>(i)]) / 30000.0f;
         }
     }
     
@@ -510,14 +545,25 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     }
     encryptedRMS = std::sqrt(encryptedRMS / totalSamples);
     
-    // Apply normalization
+    // Apply normalization with safety limits
     if (encryptedRMS > 0.0f) {
-        const float gainFactor = originalRMS / encryptedRMS;
+        const float targetRMS = std::min(originalRMS, 0.25f); // Limit maximum RMS
+        const float gainFactor = targetRMS / encryptedRMS;
+        const float safeGainFactor = std::min(gainFactor, 2.0f); // Limit maximum gain
+        
         for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
             float* data = buffer.getWritePointer(channel);
             for (int i = 0; i < buffer.getNumSamples(); i++) {
-                data[i] *= gainFactor;
+                data[i] *= safeGainFactor;
             }
+        }
+    }
+    
+    // Final safety check - hard clip anything that somehow got through
+    for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
+        float* data = buffer.getWritePointer(channel);
+        for (int i = 0; i < buffer.getNumSamples(); i++) {
+            data[i] = std::max(-1.0f, std::min(1.0f, data[i]));
         }
     }
 }
