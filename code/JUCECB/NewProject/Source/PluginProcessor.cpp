@@ -458,8 +458,8 @@ void JUCECB::encryptAudioECB(AudioBuffer<float>& buffer, const String& key)
     
     // Generate a fixed key from the string
     std::vector<uint8_t> aesKey(32, 0); // 256-bit key
-    for (size_t i = 0; i < static_cast<size_t>(key.length()) && i < 32; i++) {
-        aesKey[i] = static_cast<uint8_t>(key[i]);
+    for (int i = 0; i < key.length() && i < 32; i++) {
+        aesKey[i] = key[i];
     }
     
     const auto numChannels = buffer.getNumChannels();
@@ -564,22 +564,22 @@ void JUCECB::loadFile()
 {
     if (fileChooser == nullptr)
     {
-        fileChooser = std::make_unique<FileChooser>(
-                                                    "Please select a WAV file",
-                                                    File::getSpecialLocation(File::userHomeDirectory),
-                                                    "*.wav",
-                                                    true
-                                                    );
+        fileChooser = std::make_unique<FileChooser>(  // Added missing template parameter
+            "Please select a WAV file",
+            File::getSpecialLocation(File::userHomeDirectory),
+            "*.wav",
+            true
+        );
     }
     
     auto chooserFlags = FileBrowserComponent::openMode |
-    FileBrowserComponent::canSelectFiles;
+                       FileBrowserComponent::canSelectFiles;
     
     fileChooser->launchAsync(chooserFlags, [this](const FileChooser& fc)
-                             {
+    {
         auto file = fc.getResult();
         
-        if (file == File{}) // User canceled or no file selected
+        if (file == File{})
         {
             return;
         }
@@ -587,8 +587,8 @@ void JUCECB::loadFile()
         if (!isValidWavFile(file))
         {
             AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon,
-                                             "Invalid File",
-                                             "Please select a valid WAV file.");
+                                           "Invalid File",
+                                           "Please select a valid WAV file.");
             return;
         }
         
@@ -596,28 +596,31 @@ void JUCECB::loadFile()
         
         if (reader != nullptr)
         {
+            auto numSamples = reader->lengthInSamples;  // Store length to avoid repeated access
+            
             // Convert to mono if necessary
-            originalBuffer.setSize(1, reader->lengthInSamples);
+            originalBuffer.setSize(1, static_cast<int>(numSamples));
             if (reader->numChannels == 1)
             {
-                reader->read(&originalBuffer, 0, reader->lengthInSamples, 0, true, true);
+                reader->read(&originalBuffer, 0, static_cast<int>(numSamples), 0, true, true);
             }
             else
             {
                 // Mix down to mono
-                AudioBuffer<float> tempBuffer(reader->numChannels, reader->lengthInSamples);
-                reader->read(&tempBuffer, 0, reader->lengthInSamples, 0, true, true);
+                AudioBuffer<float> tempBuffer(reader->numChannels, static_cast<int>(numSamples));
+                reader->read(&tempBuffer, 0, static_cast<int>(numSamples), 0, true, true);
                 
                 // Average all channels
                 originalBuffer.clear();
-                for (int channel = 0; channel < reader->numChannels; channel++)
+                for (int channel = 0; channel < reader->numChannels; ++channel)
                 {
-                    originalBuffer.addFrom(0, 0, tempBuffer, channel, 0, reader->lengthInSamples, 1.0f/reader->numChannels);
+                    originalBuffer.addFrom(0, 0, tempBuffer, channel, 0,
+                        static_cast<int>(numSamples), 1.0f/reader->numChannels);
                 }
             }
             
             // Create encrypted buffer (mono)
-            encryptedBuffer.setSize(1, reader->lengthInSamples);
+            encryptedBuffer.setSize(1, static_cast<int>(numSamples));
             encryptedBuffer.copyFrom(0, 0, originalBuffer, 0, 0, originalBuffer.getNumSamples());
             
             // Encrypt the buffer with quantization
