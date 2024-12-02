@@ -188,7 +188,6 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
         return;
     }
 
-    // Add at start of processBlock
     float maxLevel = 0.0f;
     for (int channel = 0; channel < buffer.getNumChannels(); channel++) {
         const float* data = buffer.getReadPointer(channel);

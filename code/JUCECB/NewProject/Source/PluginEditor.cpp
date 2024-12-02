@@ -22,8 +22,7 @@ JUCECBEditor::JUCECBEditor (JUCECB& p)
     addAndMakeVisible(wetDryLabel);
     
     // Connect slider to parameter
-    wetDryAttachment.reset(new AudioProcessorValueTreeState::SliderAttachment(
-                                                                              audioProcessor.parameters, "wetdry", wetDrySlider));
+    wetDryAttachment.reset(new AudioProcessorValueTreeState::SliderAttachment(audioProcessor.parameters, "wetdry", wetDrySlider));
     
     // Set up key input
     keyInput.setMultiLine(false);
@@ -61,7 +60,7 @@ JUCECBEditor::JUCECBEditor (JUCECB& p)
     
     loopAttachment.reset(new AudioProcessorValueTreeState::ButtonAttachment(audioProcessor.parameters, "loop", loopButton));
     
-    setSize(400, 280);  // Made window slightly taller
+    setSize(400, 280);
 }
 
 JUCECBEditor::~JUCECBEditor()
