@@ -15,7 +15,7 @@
 - It then does a wet/dry mix.
 - Finally, it plays the resulting sound with the correct pitch when the corresponding key is pressed, with an envelope to prevent clicking.
 - This produces an almost buzzsaw-esque distortion on waveforms.
-- This code also handles polyphony, by using a custom Voice struct that contains all the corresponding parameters for MIDI playback (MIDI note number, playback rate, etc) and also holds data needed to calculate the envelope (attack time, release time, etc.) It uses an array to store a max of 4 notes at a time, and has note stealing.
+- This code also handles polyphony, by using a custom Voice struct that contains all the corresponding parameters for MIDI playback (MIDI note number, playback rate, etc) and also holds data needed to calculate the envelope (attack time, release time, etc.) It uses an array to store a max of 4 of these voice structs at a time, and has note stealing.
 ## Interface
 ![interface](https://i.imgur.com/qYo9YiP.png)
 - Load .wav file: Loads a .wav file
