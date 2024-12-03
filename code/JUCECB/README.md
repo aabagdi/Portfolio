@@ -23,3 +23,4 @@
 - Gain: Gain control
 - Encryption key: The key used for encrypting samples. Play aronud with this to get slightly different sounds!
 - Loop: If enabled, loop the loaded .wav file when the key is held down.
+- There are sound samples int the 'Sound Sample' folder if you want to see what the plugin sounds like.
