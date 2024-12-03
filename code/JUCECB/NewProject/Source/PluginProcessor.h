@@ -111,7 +111,7 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
             }
             
             if (timeSinceAttack < attackTime) {
-                // Smoother cubic curve for attack
+                // Cubic curve for attack
                 float t = timeSinceAttack / attackTime;
                 attackGain = t * t * (3.0f - 2.0f * t); // Smooth cubic interpolation
             }
@@ -128,8 +128,7 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
                     isActive = false;
                     return 0.0f;
                 }
-                
-                // Smoother release curve
+
                 float t = timeSinceRelease / releaseTime;
                 releaseGain = std::pow(1.0f - t, 2.0f); // Quadratic decay
             }
