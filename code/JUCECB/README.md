@@ -21,6 +21,6 @@
 - Load .wav file: Loads a .wav file
 - Dry/Wet: Controls the dry/wet mix. 0 is totally dry, 1 is totally wet.
 - Gain: Gain control
-- Encryption key: The key used for encrypting samples. Play aronud with this to get slightly different sounds!
+- Encryption key: The key used for encrypting samples. Play around with this to get slightly different sounds!
 - Loop: If enabled, loop the loaded .wav file when the key is held down.
-- There are sound samples int the 'Sound Sample' folder if you want to see what the plugin sounds like.
+- There are sound samples int the 'Sound Sample' folder if you want to hear what the plugin sounds like.
