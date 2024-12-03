@@ -86,7 +86,7 @@ class JUCECB  : public juce::AudioProcessor, public AudioProcessorParameter::Lis
         double attackStart = 0;       // Sample position when note started
         bool isReleasing = false;
         double sampleRate = 44100.0;
-        int bufferLength = 0;         // Add this to store buffer length
+        int bufferLength = 0;
         static constexpr float crossfadeLength = 64; // samples
         static constexpr int XFADE_LENGTH = 512; // Longer crossfade for smoother transitions
         float previousSample = 0.0f; // Store last sample for interpolation

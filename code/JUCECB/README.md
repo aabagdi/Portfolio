@@ -8,11 +8,18 @@
 - I figured that if ECB works this way on images with patterns in them, it could work with periodic sounds!
 - Thus, the cryptographer's chagrin becomes the musiscian's merriment: I've harnessed ECB to create an interesting effect on waveforms.
 - What this code does is generate an audio buffer given a .wav file.
-- It then
-- It then quantizes the samples to exaggerate patterns in them.
-- It then splits the samples into 2048-sample chunks.
-- It then uses a key to encrypt each chunk.
+- It then mixes it down to mono if it's a stereo file.
+- It then normalizes and quantizes the input.
+- It then uses ECB to create an encrypted audio buffer.
+- It then normalizes the encrypted buffer.
 - It then does a wet/dry mix.
-- It then normalizes the encrypted audio to keep the amplitude the same as the original generated waveform.
-- Finally, it either writes a new .wav file with the new, encrypted samples or plays from the command line.
+- Finally, it plays the resulting sound with the correct pitch when the corresponding key is pressed, with an envelope to prevent clicking.
 - This produces an almost buzzsaw-esque distortion on waveforms.
+- This code also handles polyphony, by using a custom Voice struct that contains all the corresponding parameters for MIDI playback (MIDI note number, playback rate, etc) and also holds data needed to calculate the envelope (attack time, release time, etc.) It uses an array to store a max of 4 notes at a time, and has note stealing.
+## Interface
+![interface](https://i.imgur.com/qYo9YiP.png)
+- Load .wav file: Loads a .wav file
+- Dry/Wet: Controls the dry/wet mix. 0 is totally dry, 1 is totally wet.
+- Gain: Gain control
+- Encryption key: The key used for encrypting samples. Play aronud with this to get slightly different sounds!
+- Loop: If enabled, loop the loaded .wav file when the key is held down.

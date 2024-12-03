@@ -311,7 +311,6 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
     float gainInDB = gainParameter->load();
     float gainFactor = std::pow(10.0f, gainInDB / 20.0f);
     
-    // More conservative polyphony scaling
     float polyScale = 0.5f / std::sqrt(static_cast<float>(voices.size()));
     
     AudioBuffer<float> tempBuffer(1, buffer.getNumSamples());
@@ -329,7 +328,6 @@ void JUCECB::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& mi
             double readPosition = voice.samplePosition + (sample * voice.playbackRate);
             double nextLoopPosition = readPosition;
             
-            // Handle looping
             while (nextLoopPosition >= originalBuffer.getNumSamples()) {
                 nextLoopPosition -= originalBuffer.getNumSamples();
             }
