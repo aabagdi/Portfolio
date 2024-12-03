@@ -10,7 +10,7 @@
 - What this code does is generate an audio buffer given a .wav file.
 - It then mixes it down to mono if it's a stereo file.
 - It then normalizes and quantizes the input.
-- It then uses ECB to create an encrypted audio buffer.
+- It then uses ECB to create an encrypted audio buffer from the original audio buffer.
 - It then normalizes the encrypted buffer.
 - It then does a wet/dry mix.
 - Finally, it plays the resulting sound with the correct pitch when the corresponding key is pressed, with an envelope to prevent clicking.
