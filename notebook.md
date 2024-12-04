@@ -97,3 +97,14 @@
 - Thanks to the help of Claude 3.5 I figured out how to add an envelope to remove clicking on key release.
 - Right now the plugin is mono only, and mixes stereo down to mono.
 - I will work on a README.md later.
+
+## 11/28/2024
+- The plugin works on Mac but doesn't work on Linux.
+- I am currently troubleshooting the issue.
+
+## 12/03/2024
+- I completed the README for JUCECB.
+- I also completed Popgen.
+- I added an argument for a chord progression. This wasn't hard to do thanks to argparse and the nifty `nargs` parameter.
+- I changed the sine wave to a square wave for that Nintendo Entertainment System sound by using `np.sign` on the sine wave.
+- I added drums by the way of manipulating noise samples. This was done by using `np.random` to generate random noise and exponential decay to bring in the crack sound for the snare hit, and using a frequency-modulated sine wave for the kick. There is an exponential decay from 60 Hz to 0 Hz in order to get that characteristic kick "boom". It uses `np.cumsum`to accumulate the frequency over time. It also has an envelope to decrease the volume of the kick quickly.

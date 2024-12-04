@@ -25,3 +25,12 @@
 
 ## 11/24/2024
 - Updated notebook.md
+
+## 11/28/2024
+- Updated notebook.md.
+
+## 12/02/2024
+- Added README.md to JUCECB.
+
+## 12/03/2024
+- Added popgen to the code folder.
